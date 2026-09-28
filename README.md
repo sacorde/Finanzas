@@ -21,6 +21,7 @@ La planilla sigue siendo una planilla: escribís en las celdas, hacés cuentas (
 1. [Instalación (10 minutos)](#instalación-10-minutos)
 2. [Cómo se usa](#cómo-se-usa)
 3. [Automatizaciones](#automatizaciones)
+   - [Deploy automático desde GitHub](#deploy-automático)
 4. [Tu Excel anterior](#tu-excel-anterior)
 5. [Preguntas frecuentes](#preguntas-frecuentes)
 6. [Para desarrollar](#para-desarrollar)
@@ -49,6 +50,8 @@ npm i -g @google/clasp && clasp login
 cp .clasp.json.example .clasp.json   # pegá el ID del proyecto (Configuración del proyecto → ID de la secuencia de comandos)
 npm run push
 ```
+
+**Opción C · automático desde GitHub** (recomendado): después de configurarlo una vez, cada cambio que llega a `main` se sube solo a Apps Script. Ver [Deploy automático](#deploy-automático).
 
 ### 2. Instalá
 
@@ -188,6 +191,37 @@ Filtros arriba para todo: período (6M, 12M, este año, 24M, todo o desde/hasta)
 | Inflación, dólar y feriados | Semanal / anual |
 | Fecha y categoría en Movimientos | Al escribir una descripción |
 | Enfocar el mes actual y plegar años anteriores | Al abrir la planilla |
+
+---
+
+## Deploy automático
+
+El workflow [`.github/workflows/deploy-apps-script.yml`](.github/workflows/deploy-apps-script.yml) corre los tests y sube `apps-script/` a tu proyecto con [clasp](https://github.com/google/clasp) cada vez que se actualiza `main` (o a mano: pestaña **Actions → Deploy a Apps Script → Run workflow**). Si un test falla, no se sube nada.
+
+**Configuración (una sola vez, ~5 minutos, en tu computadora con Node instalado):**
+
+1. Activá la API de Apps Script: <https://script.google.com/home/usersettings> → *Google Apps Script API* → **Activado**.
+2. Iniciá sesión con clasp (abre el navegador para autorizar tu cuenta de Google):
+   ```bash
+   npx @google/clasp@2.4.2 login
+   ```
+   Esto crea el archivo `~/.clasprc.json` (en Windows: `C:\Users\TU_USUARIO\.clasprc.json`).
+3. Copiá el **ID del proyecto**: en el editor de Apps Script → ⚙️ *Configuración del proyecto* → *ID de la secuencia de comandos*.
+4. En GitHub: repo → **Settings → Secrets and variables → Actions → New repository secret**:
+
+   | Secreto | Valor |
+   |---|---|
+   | `CLASPRC_JSON` | Todo el contenido del archivo `.clasprc.json` |
+   | `SCRIPT_ID` | El ID del paso 3 |
+   | `DEPLOYMENT_ID` *(opcional)* | Si publicaste la app web: *Implementar → Gestionar implementaciones* → ID. Así la app del celular también se actualiza |
+
+5. Corré el workflow a mano una vez (Actions → *Deploy a Apps Script* → *Run workflow*) para probar.
+
+Notas:
+
+- `clasp push --force` **reemplaza todos los archivos** del proyecto por los de `apps-script/`. Si antes pegaste `dist/Finanzas.gs` en `Código.gs`, ese archivo se borra solo (es lo correcto: si no, habría funciones duplicadas).
+- Después de subir código nuevo alcanza con recargar la planilla. Si el cambio agrega permisos nuevos, Google te los pide la próxima vez que uses el menú.
+- `CLASPRC_JSON` da acceso a tus proyectos de Apps Script: guardalo solo como secreto del repo y no lo compartas. Si alguna vez querés revocarlo: <https://myaccount.google.com/permissions> → *clasp*.
 
 ---
 

@@ -1,0 +1,66 @@
+# Sube el código a Google Apps Script automáticamente (sin copiar y pegar).
+#
+# Se ejecuta cuando se actualiza main (o a mano desde la pestaña Actions).
+# Configuración única: ver "Deploy automático" en el README.
+#   Secretos del repo (Settings → Secrets and variables → Actions):
+#     CLASPRC_JSON   contenido de ~/.clasprc.json tras `npx @google/clasp@2.4.2 login`
+#     SCRIPT_ID      ID del proyecto de Apps Script
+#     DEPLOYMENT_ID  (opcional) ID de la implementación web, para actualizar la app del celular
+
+name: Deploy a Apps Script
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'apps-script/**'
+      - '.github/workflows/deploy-apps-script.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-apps-script
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Tests
+        run: npm test
+
+      - name: Verificar secretos
+        env:
+          CLASPRC_JSON: ${{ secrets.CLASPRC_JSON }}
+          SCRIPT_ID: ${{ secrets.SCRIPT_ID }}
+        run: |
+          if [ -z "$CLASPRC_JSON" ] || [ -z "$SCRIPT_ID" ]; then
+            echo "::error::Faltan los secretos CLASPRC_JSON y/o SCRIPT_ID. Ver 'Deploy automático' en el README."
+            exit 1
+          fi
+
+      - name: Configurar clasp
+        env:
+          CLASPRC_JSON: ${{ secrets.CLASPRC_JSON }}
+          SCRIPT_ID: ${{ secrets.SCRIPT_ID }}
+        run: |
+          printf '%s' "$CLASPRC_JSON" > ~/.clasprc.json
+          printf '{"scriptId":"%s","rootDir":"apps-script"}' "$SCRIPT_ID" > .clasp.json
+
+      - name: Subir código
+        run: npx --yes @google/clasp@2.4.2 push --force
+
+      - name: Actualizar app web
+        env:
+          DEPLOYMENT_ID: ${{ secrets.DEPLOYMENT_ID }}
+        if: env.DEPLOYMENT_ID != ''
+        run: npx --yes @google/clasp@2.4.2 deploy --deploymentId "$DEPLOYMENT_ID" --description "GitHub ${GITHUB_SHA::7}"
+
+      - name: Limpiar credenciales
+        if: always()
+        run: rm -f ~/.clasprc.json .clasp.json
