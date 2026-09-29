@@ -4,7 +4,9 @@ App web de finanzas personales que se usa **como un Excel** y guarda todo en **G
 
 ![Planilla](docs/img/planilla.png)
 
-- **Planilla tipo Excel.** Conceptos en filas y meses en columnas. Se navega con el teclado, acepta cuentas (`=10615+178223`), copiar y pegar, deshacer, y muestra la suma de la selección.
+- **Planilla tipo Excel, todo en celdas.** Conceptos en filas y meses en columnas. Nombres, vencimiento, medio de pago y montos se escriben en la grilla. Acepta cuentas (`=10615+178223`), copiar y pegar, deshacer, y muestra la suma de la selección.
+- **Cualquier mes.** Con el selector ‹ mes › vas a cualquier mes pasado o futuro para cargarlo o corregirlo.
+- **Categorías con color.** Cada categoría tiene su color y un **+** al lado del nombre para agregar una fila.
 - **Arrastre de precios.** Si cargás un aumento en septiembre, los meses siguientes se actualizan solos. Lo que cargás vos se ve en negro; lo que estima el sistema, en *gris itálica*.
 - **Siempre en el mes actual.** La columna del mes está resaltada y los años anteriores se pliegan a su total.
 - **Vencimientos en palabras.** Escribís `15`, `10 hábil`, `1er hábil` o `último hábil`, con feriados de Argentina, y se sincronizan con tu Google Calendar.
@@ -42,9 +44,9 @@ Después de la instalación, el archivo de Google Sheets queda con una hoja por 
 
 | Tabla | Una fila por… |
 |---|---|
-| `Conceptos` | Concepto: nombre, sección, categoría, vencimiento, medio de pago, cómo proyectar |
-| `Valores` | Concepto × mes: monto, cuenta (`10615+178223`), estado (`confirmado` / `estimado`) |
-| `Movimientos` | Gasto eventual: fecha, descripción, categoría, monto, cuotas, medio, mes en que impacta |
+| `Conceptos` | Fila de la grilla: nombre, sección, categoría, tipo (fijo / eventual), vencimiento, medio de pago, cómo proyectar |
+| `Valores` | Fila × mes: monto, cuenta (`10615+178223`), estado (`confirmado` / `estimado`) |
+| `Categorias` | Categoría de cada sección, con su color y orden |
 | `Indices` | Mes: inflación, dólar oficial, dólar blue |
 | `Feriados` | Feriado o día no laborable |
 | `Config` | Preferencia general |
@@ -57,24 +59,33 @@ No hace falta abrirla. Si editás una tabla a mano, respetá los encabezados.
 
 ### Planilla
 
+![Agregar una fila](docs/img/nueva-fila.png)
+
+Todo se agrega y se modifica en las celdas:
+
 | Acción | Cómo |
 |---|---|
 | Cargar un monto | Seleccioná la celda y escribí: `89423`, `89.423`, `150k` o `=1500*3`. Enter para guardar. |
+| Ir a otro mes | Selector **‹ Septiembre 2026 ›** arriba (o clic en el encabezado del mes). **Hoy** vuelve al mes actual. |
+| Agregar una fila | **+** al lado del nombre de la categoría: aparece una fila nueva, escribís el nombre y Enter. |
+| Agregar una categoría | Pasá el mouse por la sección → **+ categoría**. |
+| Renombrar | Escribí sobre el nombre (fila o categoría). |
+| Vence / medio de pago | Columnas **Vence** y **Medio de pago** (botón *Vence · Medio* para mostrarlas u ocultarlas). |
 | Editar | Doble clic, Enter o F2. |
 | Moverse | Flechas, Tab, clic. Shift + flechas o arrastrar para seleccionar un rango. |
-| Borrar | Supr. En un mes futuro vuelve al estimado automático. Para "no se paga", escribí `0`. |
+| Borrar un monto | Supr. En un mes futuro vuelve al estimado automático. Para "no se paga", escribí `0`. |
+| Eliminar una fila | Seleccioná su nombre y Supr (o clic derecho → Eliminar fila). |
+| Mover una fila | Alt + ↑ / ↓, o clic derecho → Subir / Bajar / Mover a categoría. |
 | Copiar / pegar | Ctrl+C / Ctrl+V, también desde y hacia Excel o Sheets. |
 | Deshacer / rehacer | Ctrl+Z / Ctrl+Y. |
 | Confirmar un estimado | Clic derecho → **Confirmar**, o escribir el mismo valor. |
-| Editar un concepto | Clic en su nombre: nombre, categoría, vence, medio de pago, proyección. |
-| Agregar concepto o categoría | Filas **＋ Agregar concepto** / **＋ Nueva categoría**. |
-| Plegar | Clic en una sección, categoría o año. |
-| Ir al mes actual | Botón **🎯 Hoy**. |
+| Meses futuros, color | Clic derecho sobre la fila o la categoría. |
+| Plegar | Clic en la flecha de una sección o categoría, o en un año. |
 | Carga rápida | Tecla `/` o la barra ⚡ de arriba. |
 
 Los cambios se guardan solos: arriba a la derecha dice *Guardando…* y después *Guardado*.
 
-**Proyección** (en cada concepto):
+**Proyección** (clic derecho → Meses futuros):
 
 | Modo | Para qué |
 |---|---|
@@ -83,7 +94,7 @@ Los cambios se guardan solos: arriba a la derecha dice *Guardando…* y después
 | Ajustar por inflación | Último valor más la inflación esperada. |
 | No proyectar | Aguinaldo, bonos, ingresos irregulares. |
 
-**Vencimientos:** `15` · `10 hábil` (si cae feriado, el hábil siguiente) · `18 hábil anterior` · `1er hábil` · `5to día hábil` · `último hábil` · `anteúltimo hábil` · `último día` · `primer lunes` · `último viernes`. El día de vencimiento se ve en la celda del mes. Con medio de pago **Débito automático**, el monto se confirma solo ese día.
+**Vencimientos** (columna Vence): `15` · `10 hábil` (si cae feriado, el hábil siguiente) · `18 hábil anterior` · `1er hábil` · `5to día hábil` · `último hábil` · `anteúltimo hábil` · `último día` · `primer lunes` · `último viernes`. El día de vencimiento se ve en la celda del mes. Con medio de pago **Débito automático**, el monto se confirma solo ese día.
 
 ### Carga rápida
 
@@ -91,18 +102,18 @@ Los cambios se guardan solos: arriba a la derecha dice *Guardando…* y después
 
 | Escribís | Pasa |
 |---|---|
-| `luz 89.423` | Confirma la luz de este mes y actualiza los meses siguientes. |
+| `luz 89.423` | Confirma la luz del mes elegido y actualiza los meses siguientes. |
 | `expensas 191211+11389 oct` | Guarda la cuenta en octubre. |
 | `salario 3.600.000 mes que viene` | Carga el ingreso en el mes siguiente. |
-| `cena 25k` | Gasto eventual en *Salidas y comida*. |
-| `heladera 900k 6 cuotas visa` | $ 150.000 por mes durante 6 meses, desde el mes siguiente (tarjeta). |
+| `cena 25k` | Fila nueva en Eventuales › *Salidas y comida*. |
+| `heladera 900k 6 cuotas visa` | Fila nueva con $ 150.000 por mes durante 6 meses, desde el mes siguiente (tarjeta). |
 | `coto 19/07 57500` | Gasto con fecha. |
 
 Antes de guardar ves qué va a hacer, y después tenés **Deshacer**. La categoría se aprende de lo que cargaste antes.
 
-### Eventuales y cuotas
+### Gastos eventuales y cuotas
 
-Los gastos sueltos van a **Movimientos**. La sección **Eventuales** de la planilla los suma por categoría y por mes, repartiendo las cuotas. Clic en una celda de Eventuales muestra los gastos de ese mes y permite agregar uno.
+Cada gasto suelto es una fila dentro de su categoría de **Eventuales**, como en el Excel original. Para cuotas, escribí en la celda del primer mes `600k 3c` (o `600000 x3`): se reparte $ 200.000 en ese mes y los dos siguientes. Solo se muestran las filas con montos en los años desplegados, así la grilla no crece sin fin.
 
 ![Eventuales](docs/img/eventuales.png)
 
@@ -183,14 +194,14 @@ apps-script/            código (lo que sube el deploy)
   Main.js               doGet (app web) y menú de la planilla
   Api.js                funciones que usa la app (google.script.run)
   Db.js · Config.js     tablas y configuración
-  Modelo.js             conceptos, valores, proyección, vencimientos
+  Modelo.js             conceptos, valores, categorías, proyección, vencimientos
   Proyeccion.js         arrastre de precios (lógica pura)
   Fechas.js · Montos.js reglas de vencimiento y días hábiles · números argentinos y cuentas
   Categorias.js         categorías sugeridas para gastos eventuales
   Indices.js            inflación, dólar y feriados
   Calendario.js         Google Calendar
   Tareas.js             tarea diaria
-  Instalacion.js        instalación, respaldo y limpieza de hojas
+  Instalacion.js        instalación, respaldo, limpieza de hojas y actualización automática de la base
   Legado.js             importación del Excel original y de la versión 2
   App.html              página de la app (incluye los demás .html)
   Estilos.html · Nucleo.html · Grilla.html · Tablero.html · AppJs.html

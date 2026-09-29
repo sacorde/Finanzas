@@ -172,10 +172,9 @@ function etiquetaMesP(iso) {
 }
 
 /** Meses de la línea de tiempo (igual que el servidor). */
-function lineaDeTiempoP(valoresIdx, movimientos, hoyIso, horizonte) {
+function lineaDeTiempoP(valoresIdx, hoyIso, horizonte) {
   var hoy = hoyIso.slice(0, 7), min = sumarMesP(hoy, -12);
   Object.keys(valoresIdx).forEach(function (cid) { Object.keys(valoresIdx[cid]).forEach(function (m) { if (m < min) min = m; }); });
-  (movimientos || []).forEach(function (m) { if (m.mes && m.mes < min) min = m.mes; });
   var fin = sumarMesP(hoy, horizonte);
   var out = [];
   for (var m = min.slice(0, 4) + '-01'; m <= fin.slice(0, 4) + '-12'; m = sumarMesP(m, 1)) out.push(m);
@@ -190,65 +189,49 @@ function indexarValoresP(filas) {
   return idx;
 }
 
-/** Suma de gastos eventuales por categoría y mes, repartiendo cuotas: {categoria: {mes: total}} */
-function sumasEventuales(movimientos) {
-  var out = {};
-  (movimientos || []).forEach(function (mv) {
-    if (!mv.mes) return;
-    var n = Math.max(1, Number(mv.cuotas) || 1), cuota = (Number(mv.monto) || 0) / n;
-    var cat = out[mv.categoria] = out[mv.categoria] || {};
-    for (var k = 0; k < n; k++) { var mes = sumarMesP(mv.mes, k); cat[mes] = (cat[mes] || 0) + cuota; }
-  });
-  return out;
-}
-
-/** Movimientos que impactan en un mes (con el número de cuota). */
-function movimientosDelMes(movimientos, categoria, mes) {
-  return (movimientos || []).filter(function (mv) {
-    if (categoria && mv.categoria !== categoria) return false;
-    var n = Math.max(1, Number(mv.cuotas) || 1);
-    return mv.mes && mv.mes <= mes && sumarMesP(mv.mes, n - 1) >= mes;
-  }).map(function (mv) {
-    var n = Math.max(1, Number(mv.cuotas) || 1);
-    var k = 0; while (sumarMesP(mv.mes, k) < mes) k++;
-    return { mv: mv, cuota: k + 1, cuotas: n, importe: (Number(mv.monto) || 0) / n };
-  });
-}
-
 /**
- * Filas de la grilla: secciones, categorías, conceptos y filas "agregar".
- * @param {Object} colapsadas  {'s:Nombre' | 'c:Seccion/Categoria': true}
+ * Filas de la grilla: sección → conceptos sin categoría → cada categoría con sus conceptos.
+ * @param {Object} opts {colapsadas:{key:true}, visible:function(concepto):bool, nuevos:[{t:'nuevo'|'nuevacat', seccion, categoria}]}
  */
-function construirFilas(conceptos, secciones, colapsadas) {
-  colapsadas = colapsadas || {};
+function construirFilas(conceptos, categorias, secciones, opts) {
+  opts = opts || {};
+  var colapsadas = opts.colapsadas || {}, visible = opts.visible || function () { return true; }, nuevos = opts.nuevos || [];
   var filas = [];
-  var nombres = secciones.map(function (s) { return s.nombre; });
   var todas = secciones.slice();
-  conceptos.forEach(function (c) { if (nombres.indexOf(c.seccion) < 0) { nombres.push(c.seccion); todas.push({ nombre: c.seccion, clase: c.clase, tipo: c.tipo }); } });
+  conceptos.forEach(function (c) { if (!todas.some(function (s) { return s.nombre === c.seccion; })) todas.push({ nombre: c.seccion, clase: c.clase, tipo: c.tipo }); });
+  var orden = function (a, b) { return a.orden - b.orden; };
   todas.forEach(function (sec) {
-    var cs = conceptos.filter(function (c) { return c.seccion === sec.nombre; }).sort(function (a, b) { return a.orden - b.orden; });
-    var kS = 's:' + sec.nombre;
-    filas.push({ t: 'sec', sec: sec, key: kS, conceptos: cs });
-    if (colapsadas[kS]) return;
-    var conCategorias = sec.tipo !== 'eventual' && cs.some(function (c) { return c.categoria && c.categoria !== sec.nombre; });
-    if (!conCategorias) {
-      cs.forEach(function (c) { filas.push({ t: 'item', c: c, sec: sec }); });
-      filas.push({ t: 'add', sec: sec, categoria: sec.tipo === 'eventual' ? '' : sec.nombre });
-      return;
-    }
-    var cats = [];
-    cs.forEach(function (c) { if (cats.indexOf(c.categoria) < 0) cats.push(c.categoria); });
-    cats.forEach(function (cat) {
-      var kC = 'c:' + sec.nombre + '/' + cat;
-      var items = cs.filter(function (c) { return c.categoria === cat; });
-      filas.push({ t: 'cat', sec: sec, categoria: cat, key: kC, conceptos: items });
-      if (colapsadas[kC]) return;
-      items.forEach(function (c) { filas.push({ t: 'item', c: c, sec: sec }); });
-      filas.push({ t: 'add', sec: sec, categoria: cat });
+    var cs = conceptos.filter(function (c) { return c.seccion === sec.nombre; }).sort(orden);
+    var cats = categorias.filter(function (c) { return c.seccion === sec.nombre; }).sort(orden).slice();
+    cs.forEach(function (c) {
+      if (c.categoria !== sec.nombre && !cats.some(function (k) { return k.nombre === c.categoria; })) cats.push({ seccion: sec.nombre, nombre: c.categoria, color: '', orden: 1e9 });
     });
-    filas.push({ t: 'addcat', sec: sec });
+    var kS = 's:' + sec.nombre;
+    filas.push({ t: 'sec', sec: sec, key: kS, conceptos: cs, conCategorias: cats.length > 0 });
+    if (colapsadas[kS]) return;
+    var directos = cs.filter(function (c) { return c.categoria === sec.nombre; });
+    directos.forEach(function (c) { if (visible(c)) filas.push({ t: 'item', c: c, sec: sec, cat: null }); });
+    nuevos.forEach(function (n) { if (n.t === 'nuevo' && n.seccion === sec.nombre && n.categoria === sec.nombre) filas.push({ t: 'nuevo', sec: sec, categoria: sec.nombre, cat: null }); });
+    cats.forEach(function (cat) {
+      var kC = 'c:' + sec.nombre + '/' + cat.nombre;
+      var items = cs.filter(function (c) { return c.categoria === cat.nombre; });
+      filas.push({ t: 'cat', sec: sec, cat: cat, key: kC, conceptos: items });
+      if (colapsadas[kC]) return;
+      items.forEach(function (c) { if (visible(c)) filas.push({ t: 'item', c: c, sec: sec, cat: cat }); });
+      nuevos.forEach(function (n) { if (n.t === 'nuevo' && n.seccion === sec.nombre && n.categoria === cat.nombre) filas.push({ t: 'nuevo', sec: sec, categoria: cat.nombre, cat: cat }); });
+    });
+    nuevos.forEach(function (n) { if (n.t === 'nuevacat' && n.seccion === sec.nombre) filas.push({ t: 'nuevacat', sec: sec }); });
   });
   return filas;
+}
+
+/** "900k 6c", "900000 x6", "900k en 6 cuotas" → {texto:'900k', cuotas:6}; null si no hay cuotas. */
+function cuotasEnCelda(texto) {
+  var m = /^(.*?\S)(?:\s+en\s+|\s*x\s*|\s+)(\d{1,2})\s*(?:c|cuotas?|ctas?)\s*$/i.exec(String(texto || '').trim()) ||
+    /^(.*?\S)\s+x\s*(\d{1,2})\s*$/i.exec(String(texto || '').trim());
+  if (!m || !montoP(m[1])) return null;
+  var n = Number(m[2]);
+  return n >= 2 && n <= 60 ? { texto: m[1], cuotas: n } : null;
 }
 
 /** Texto crudo para editar una celda: la cuenta ("=100+50") o el número. */
@@ -338,16 +321,12 @@ function tablaPrecios(items, meses, iMeses, idx, incluirEst) {
 
 /** Datos del tablero a partir del modelo de la app. */
 function datosTablero(st) {
-  var meses = st.meses, E = st.eventuales;
+  var meses = st.meses;
   var items = st.conceptos.map(function (c) {
-    var ev = c.tipo === 'eventual';
     return {
-      nombre: c.nombre, seccion: c.seccion, categoria: c.categoria, clase: c.clase, mov: ev, medio: c.medio,
-      v: meses.map(function (m) {
-        if (ev) { var x = E[c.nombre] && E[c.nombre][m]; return x ? Math.round(x) : null; }
-        var y = st.V[c.id] && st.V[c.id][m]; return y ? Math.round(y.m) : null;
-      }),
-      e: meses.map(function (m) { var y = !ev && st.V[c.id] && st.V[c.id][m]; return y && y.e ? 1 : 0; })
+      nombre: c.nombre, seccion: c.seccion, categoria: c.categoria, clase: c.clase, mov: c.tipo === 'eventual', medio: c.medio,
+      v: meses.map(function (m) { var y = st.V[c.id] && st.V[c.id][m]; return y ? Math.round(y.m) : null; }),
+      e: meses.map(function (m) { var y = st.V[c.id] && st.V[c.id][m]; return y && y.e ? 1 : 0; })
     };
   });
   var infl = {}, oficial = {}, blue = {};

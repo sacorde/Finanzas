@@ -6,8 +6,8 @@
  */
 
 var FZ = {
-  VERSION: '3.0.0',
-  T: { CONCEPTOS: 'Conceptos', VALORES: 'Valores', MOV: 'Movimientos', IND: 'Indices', FER: 'Feriados', CFG: 'Config' },
+  VERSION: '4.0.0',
+  T: { CONCEPTOS: 'Conceptos', VALORES: 'Valores', CAT: 'Categorias', IND: 'Indices', FER: 'Feriados', CFG: 'Config' },
   PROY: ['Repetir', 'Promedio 3 meses', 'Ajustar por inflación', 'No proyectar'],
   SECCIONES: [
     { nombre: 'Ingresos', clase: 'I', tipo: 'fijo' },
@@ -22,11 +22,17 @@ var FZ = {
 var ESQUEMA = {
   Conceptos: { cols: ['id', 'nombre', 'seccion', 'clase', 'categoria', 'tipo', 'vence', 'medio', 'proyeccion', 'orden'], texto: ['id', 'nombre', 'seccion', 'clase', 'categoria', 'tipo', 'vence', 'medio', 'proyeccion'] },
   Valores: { cols: ['concepto', 'mes', 'monto', 'cuenta', 'estado'], texto: ['concepto', 'mes', 'cuenta', 'estado'] },
-  Movimientos: { cols: ['id', 'fecha', 'descripcion', 'categoria', 'monto', 'cuenta', 'cuotas', 'medio', 'mes', 'nota'], texto: ['id', 'fecha', 'descripcion', 'categoria', 'cuenta', 'medio', 'mes', 'nota'] },
+  Categorias: { cols: ['seccion', 'nombre', 'color', 'orden'], texto: ['seccion', 'nombre', 'color'] },
   Indices: { cols: ['mes', 'inflacion', 'dolar_oficial', 'dolar_blue', 'origen'], texto: ['mes', 'origen'] },
   Feriados: { cols: ['fecha', 'nombre', 'origen'], texto: ['fecha', 'nombre', 'origen'] },
   Config: { cols: ['clave', 'valor', 'descripcion'], texto: ['clave', 'valor', 'descripcion'] }
 };
+
+/** Tabla Movimientos de la versión 3 (solo para migrarla). */
+var ESQUEMA_MOV_V3 = ['id', 'fecha', 'descripcion', 'categoria', 'monto', 'cuenta', 'cuotas', 'medio', 'mes', 'nota'];
+
+/** Colores de categoría (legibles como texto sobre blanco y sobre oscuro). */
+var COLORES_CAT = ['#2A78D6', '#D9531E', '#138A62', '#B7791F', '#C2447A', '#2F7D32', '#5B45C2', '#C53030', '#0E7490', '#7C5E10'];
 
 var MESES_ES = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
 

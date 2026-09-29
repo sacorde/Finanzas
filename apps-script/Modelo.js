@@ -1,20 +1,21 @@
 /**
  * Finanzas · Modelo en memoria sobre las tablas
  *
- *  conceptos  una fila por concepto (Salario, Luz, Alquiler… y las categorías de Eventuales)
- *  valores    una fila por concepto × mes con monto, cuenta ("10615+178223") y estado
- *             (confirmado = lo cargaste vos · estimado = lo completó el sistema)
- *  movimientos gastos eventuales sueltos o en cuotas
+ *  conceptos   una fila por concepto de la grilla. Fijos (Salario, Luz…) y eventuales
+ *              (Heladera, Cena…): los eventuales son filas sueltas dentro de su categoría.
+ *  valores     una fila por concepto × mes: monto, cuenta ("10615+178223") y estado
+ *              (confirmado = lo cargaste vos · estimado = lo completó el sistema)
+ *  categorias  categorías de cada sección, con su color y orden
  */
 
 function normConcepto_(c) {
   var sec = seccionPorNombre_(c.seccion);
+  var tipo = sec ? sec.tipo : (c.tipo === 'eventual' ? 'eventual' : 'fijo');
   return {
     id: String(c.id), nombre: String(c.nombre || ''), seccion: sec ? sec.nombre : String(c.seccion || 'Gastos fijos'),
-    clase: sec ? sec.clase : (String(c.clase || 'G')), categoria: String(c.categoria || c.seccion || ''),
-    tipo: sec ? sec.tipo : (c.tipo === 'eventual' ? 'eventual' : 'fijo'),
-    vence: String(c.vence == null ? '' : c.vence), medio: String(c.medio || ''),
-    proyeccion: FZ.PROY.indexOf(String(c.proyeccion)) >= 0 ? String(c.proyeccion) : 'Repetir',
+    clase: sec ? sec.clase : (String(c.clase || 'G')), categoria: String(c.categoria || (sec ? sec.nombre : c.seccion) || ''),
+    tipo: tipo, vence: tipo === 'fijo' ? String(c.vence == null ? '' : c.vence) : '', medio: String(c.medio || ''),
+    proyeccion: tipo === 'eventual' ? 'No proyectar' : (FZ.PROY.indexOf(String(c.proyeccion)) >= 0 ? String(c.proyeccion) : 'Repetir'),
     orden: Number(c.orden) || 0
   };
 }
@@ -25,19 +26,16 @@ function seccionPorNombre_(nombre) {
   return null;
 }
 
+function normCategoria_(c) {
+  var sec = seccionPorNombre_(c.seccion);
+  return { seccion: sec ? sec.nombre : String(c.seccion), nombre: String(c.nombre || '').trim(), color: String(c.color || ''), orden: Number(c.orden) || 0 };
+}
+
 function cargarModelo_() {
   return {
     conceptos: leerTabla(FZ.T.CONCEPTOS).map(normConcepto_),
     valores: indexarValores_(leerTabla(FZ.T.VALORES)),
-    movimientos: leerTabla(FZ.T.MOV).map(normMovimiento_)
-  };
-}
-
-function normMovimiento_(m) {
-  return {
-    id: String(m.id), fecha: String(m.fecha || ''), descripcion: String(m.descripcion || ''), categoria: String(m.categoria || 'Otros'),
-    monto: Number(m.monto) || 0, cuenta: String(m.cuenta || ''), cuotas: Math.max(1, Number(m.cuotas) || 1),
-    medio: String(m.medio || ''), mes: String(m.mes || ''), nota: String(m.nota || '')
+    categorias: leerTabla(FZ.T.CAT).map(normCategoria_)
   };
 }
 
@@ -55,7 +53,7 @@ function indexarValores_(filas) {
 
 function aplanarValores_(idx, conceptos) {
   var validos = {};
-  conceptos.forEach(function (c) { if (c.tipo === 'fijo') validos[c.id] = true; });
+  conceptos.forEach(function (c) { validos[c.id] = true; });
   var filas = [];
   Object.keys(idx).sort().forEach(function (cid) {
     if (!validos[cid]) return;
@@ -68,10 +66,9 @@ function aplanarValores_(idx, conceptos) {
 }
 
 /** Meses de la línea de tiempo: desde enero del primer dato (o del año pasado) hasta diciembre del horizonte. */
-function lineaDeTiempo_(idx, movimientos, hoyIso, horizonte) {
+function lineaDeTiempo_(idx, hoyIso, horizonte) {
   var min = sumarMes_(hoyIso.slice(0, 7), -12);
   Object.keys(idx).forEach(function (cid) { Object.keys(idx[cid]).forEach(function (m) { if (m < min) min = m; }); });
-  movimientos.forEach(function (m) { if (m.mes && m.mes < min) min = m.mes; });
   var fin = sumarMes_(hoyIso.slice(0, 7), horizonte);
   var ini = min.slice(0, 4) + '-01', finAnio = fin.slice(0, 4) + '-12';
   var out = [];
@@ -89,15 +86,19 @@ function reproyectar_(modelo, ids, opts) {
   opts = opts || {};
   var cfg = leerConfig();
   var hoy = isoMes_(new Date());
-  var meses = lineaDeTiempo_(modelo.valores, modelo.movimientos, hoy + '-01', cfg.horizonte);
+  var meses = lineaDeTiempo_(modelo.valores, hoy + '-01', cfg.horizonte);
   var idxHoy = meses.indexOf(hoy);
   var idxFin = Math.min(meses.length - 1, idxHoy + cfg.horizonte);
   var confirmar = {};
   (opts.confirmar || []).forEach(function (x) { confirmar[x.concepto + '@' + x.mes] = true; });
   var infl = null, total = 0;
   modelo.conceptos.forEach(function (c) {
-    if (c.tipo !== 'fijo' || (ids && ids.indexOf(c.id) < 0)) return;
+    if (ids && ids.indexOf(c.id) < 0) return;
     var porMes = modelo.valores[c.id] = modelo.valores[c.id] || {};
+    if (c.tipo !== 'fijo') {
+      Object.keys(porMes).forEach(function (m) { if (porMes[m].estado === 'estimado' && opts.confirmarAntesDe && m < opts.confirmarAntesDe) { porMes[m].estado = 'confirmado'; total++; } });
+      return;
+    }
     var celdas = meses.map(function (m) {
       var x = porMes[m];
       if (!x) return { v: '', f: '', proy: false };
@@ -125,11 +126,40 @@ function guardarValores_(modelo) {
   escribirTabla(FZ.T.VALORES, aplanarValores_(modelo.valores, modelo.conceptos));
 }
 
-function guardarConceptos_(modelo) {
-  escribirTabla(FZ.T.CONCEPTOS, modelo.conceptos.slice().sort(function (a, b) { return a.orden - b.orden; }));
+/** Orden global: sección (orden fijo) → categoría (orden de la tabla) → concepto. Deja órdenes 10, 20, 30… */
+function renumerar_(m) {
+  var secIdx = {};
+  FZ.SECCIONES.forEach(function (s, i) { secIdx[s.nombre] = i; });
+  var si = function (n) { return secIdx.hasOwnProperty(n) ? secIdx[n] : 99; };
+  var catIdx = {};
+  m.categorias.sort(function (a, b) { return si(a.seccion) - si(b.seccion) || a.orden - b.orden; });
+  m.categorias.forEach(function (c, i) { c.orden = (i + 1) * 10; catIdx[c.seccion + '/' + c.nombre] = i; });
+  var ci = function (c) { var k = c.seccion + '/' + c.categoria; return catIdx.hasOwnProperty(k) ? catIdx[k] : -1; };
+  m.conceptos.sort(function (a, b) {
+    return si(a.seccion) - si(b.seccion) || ci(a) - ci(b) || a.orden - b.orden;
+  });
+  m.conceptos.forEach(function (c, i) { c.orden = (i + 1) * 10; });
 }
 
-/** Mes en que impacta un gasto eventual (tarjeta → mes siguiente, si está configurado). */
+function guardarConceptos_(m) {
+  renumerar_(m);
+  escribirTabla(FZ.T.CONCEPTOS, m.conceptos);
+  escribirTabla(FZ.T.CAT, m.categorias);
+}
+
+/** Crea la categoría si no existe (con el próximo color libre). */
+function asegurarCategoria_(m, seccion, nombre) {
+  if (!nombre || nombre === seccion) return null;
+  var ya = m.categorias.filter(function (c) { return c.seccion === seccion && norm_(c.nombre) === norm_(nombre); })[0];
+  if (ya) return ya;
+  var usados = m.categorias.map(function (c) { return c.color; });
+  var color = COLORES_CAT.filter(function (x) { return usados.indexOf(x) < 0; })[0] || COLORES_CAT[m.categorias.length % COLORES_CAT.length];
+  var cat = { seccion: seccion, nombre: nombre, color: color, orden: 1e6 };
+  m.categorias.push(cat);
+  return cat;
+}
+
+/** Mes en que impacta un gasto (tarjeta → mes siguiente, si está configurado). */
 function mesImputacion_(fechaIso, medio, tarjetaMesSig) {
   var f = desdeIsoDia_(fechaIso);
   var sig = tarjetaMesSig && /tarjeta|visa|amex|master/.test(norm_(medio));

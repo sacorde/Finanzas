@@ -4,11 +4,12 @@
 
 1. **Primer intento (otro repo):** terminó siendo más difícil de manipular que el Excel.
 2. **Versión 2:** la hoja de Google Sheets como interfaz, con scripts que agregaban automatizaciones. Funcionaba, pero la planilla mezclaba datos, formato y lógica, y quedaba atada a lo que Sheets deja hacer.
-3. **Versión 3 (actual):** una **app web** que se usa como un Excel y una planilla que es **solo base de datos**.
+3. **Versión 3:** una **app web** que se usa como un Excel y una planilla que es **solo base de datos**.
+4. **Versión 4 (actual):** todo se agrega y modifica en celdas (sin formularios ni pestaña de movimientos), categorías con color y selector de mes.
 
 ## Principios
 
-1. **Se edita como un Excel.** Grilla con teclado (flechas, Enter, Tab, Supr), cuentas en las celdas, copiar y pegar, deshacer, suma de la selección. Las pantallas nuevas (carga rápida, paneles) son atajos, no obligaciones.
+1. **Se edita como un Excel.** Grilla con teclado (flechas, Enter, Tab, Supr), cuentas en las celdas, copiar y pegar, deshacer, suma de la selección. Las pantallas nuevas (carga rápida, menú contextual) son atajos, no obligaciones.
 2. **El sistema nunca pisa lo que cargaste vos.** El estado *confirmado* / *estimado* es explícito (columna `estado`) y se ve en la celda (negro / gris itálica).
 3. **Datos simples y legibles.** Una tabla por entidad, una fila por registro, texto plano para meses y fechas (`2026-09`, `2026-09-28`), para que Sheets no los convierta.
 4. **Una sola configuración por cosa, en el lugar donde se usa.** Vencimiento, medio de pago y proyección están en el concepto. Ajustes solo tiene preferencias generales.
@@ -22,7 +23,9 @@
 | App web de Apps Script (HtmlService) | Sitio externo + API de Sheets | No hay servidores ni claves: corre con tu cuenta y tus permisos |
 | Tabla `Valores` larga (concepto × mes) | Grilla de meses en la hoja | Sin límites de columnas ni fórmulas frágiles, y fácil de leer desde cualquier herramienta |
 | Proyección calculada en el servidor | Fórmulas en Sheets | Reglas claras (repetir, promedio, inflación, baja con 0) y testeables |
-| Cuotas guardadas como un movimiento con `cuotas` y `mes` | Una fila por cuota | Se edita en un solo lugar; el reparto se calcula |
+| Gastos eventuales como filas de la grilla (una por gasto, dentro de su categoría) | Una lista aparte de movimientos | Todo se carga y se corrige en celdas, como en el Excel; las filas de años plegados se ocultan |
+| Cuotas escritas en la celda (`600k 3c`) | Formulario de cuotas | Se reparten en celdas normales, que se pueden corregir una por una |
+| Categorías en su tabla, con color | Categoría solo como texto en cada concepto | Permite categorías vacías, colores y orden propio |
 | Deploy a la implementación de prueba (`/dev`) | Crear una versión por deploy | Siempre el último código, sin acumular versiones; la app es privada (solo el dueño) |
 | Filtros y dashboard en el navegador | Recalcular en el servidor | Respuesta instantánea |
 
@@ -31,5 +34,5 @@
 - Importar *Finanzas 2022 / 2023* para ver la serie completa del salario.
 - Tenencias y deudas (la vieja hoja *Reservas*): patrimonio neto en el dashboard.
 - Ajustes de alquiler por ICL / IPC cada N meses como modo de proyección.
-- Importar el resumen de la tarjeta (PDF/CSV) a Movimientos.
+- Importar el resumen de la tarjeta (PDF/CSV) como filas de Eventuales.
 - Alertas: "este mes gastaste X % más en Salidas que tu promedio".

@@ -54,7 +54,7 @@ test('detecta el Excel original y lo instala', () => {
   for (const p of Object.keys(pasos)) assert.ok(pasos[p].ok !== false || p === 'calendario', p + ': ' + pasos[p].detalle);
   assert.strictEqual(env.ss._copias.length, 1, 'hace una copia de respaldo');
   assert.strictEqual(G.api_estado().instalado, true);
-  for (const t of ['Conceptos', 'Valores', 'Movimientos', 'Indices', 'Feriados', 'Config']) assert.ok(env.ss.getSheetByName(t), t);
+  for (const t of ['Conceptos', 'Valores', 'Categorias', 'Indices', 'Feriados', 'Config']) assert.ok(env.ss.getSheetByName(t), t);
 });
 
 test('conceptos con sección, categoría, vencimiento y medio', () => {
@@ -67,7 +67,8 @@ test('conceptos con sección, categoría, vencimiento y medio', () => {
   assert.strictEqual(d.conceptos.find((c) => c.nombre === 'Netflix').medio, 'Débito automático');
   assert.strictEqual(d.conceptos.find((c) => c.nombre === 'Ahorro del Mes').clase, 'A');
   assert.strictEqual(d.conceptos.find((c) => c.nombre === 'Otros Ingresos').proyeccion, 'No proyectar');
-  assert.ok(d.conceptos.some((c) => c.tipo === 'eventual' && c.nombre === 'Viajes'));
+  assert.ok(d.categorias.some((c) => c.seccion === 'Eventuales' && c.nombre === 'Viajes' && /^#/.test(c.color)));
+  assert.ok(d.categorias.some((c) => c.seccion === 'Gastos fijos' && c.nombre === 'Servicios'));
   assert.ok(d.venc[luz.id]['2026-10'], 'vencimiento calculado');
 });
 
@@ -82,10 +83,13 @@ test('valores: cuentas conservadas, proyección estimada dentro del horizonte', 
   assert.ok(!valor(d, concepto('Netflix').id, '2026-10'), 'concepto dado de baja no se proyecta');
 });
 
-test('eventuales pasan a Movimientos con categoría', () => {
+test('los gastos eventuales son filas de la grilla dentro de su categoría', () => {
   const d = G.api_datos();
-  const m = d.movimientos.map((x) => [x.descripcion, x.categoria, x.monto, x.cuenta, x.mes]);
-  assert.deepStrictEqual(plano(m), [['Heladera', 'Hogar', 900000, '', '2026-03'], ['Vuelo a Bariloche', 'Viajes', 350000, '200000+150000', '2026-07']]);
+  const ev = d.conceptos.filter((c) => c.tipo === 'eventual').map((c) => [c.nombre, c.categoria]).sort();
+  assert.deepStrictEqual(plano(ev), [['Heladera', 'Hogar'], ['Vuelo a Bariloche', 'Viajes']]);
+  const vuelo = d.conceptos.find((c) => c.nombre === 'Vuelo a Bariloche');
+  assert.deepStrictEqual(plano(valor(d, vuelo.id, '2026-07')).slice(2), [350000, '200000+150000', 0]);
+  assert.ok(!('movimientos' in d));
 });
 
 test('editar una celda confirma y arrastra el precio a los meses siguientes', () => {
@@ -108,40 +112,71 @@ test('editar una celda confirma y arrastra el precio a los meses siguientes', ()
   assert.throws(() => G.api_guardarCeldas([{ c: luz.id, mes: '2026-10', texto: 'hola' }]), /No entendí/);
 });
 
-test('crear, editar y borrar conceptos', () => {
-  const r = plano(G.api_guardarConcepto({ nombre: 'Gas', seccion: 'Gastos fijos', categoria: 'Servicios', vence: '10 hábil', medio: 'Débito automático', proyeccion: 'Promedio 3 meses' }));
+test('crear, editar y borrar conceptos desde la grilla', () => {
+  const r = plano(G.api_guardarConcepto({ nombre: 'Gas', seccion: 'Gastos fijos', categoria: 'Servicios' }));
   const gas = r.conceptos.find((c) => c.nombre === 'Gas');
   const luz = r.conceptos.find((c) => c.nombre === 'Luz');
   assert.ok(gas && gas.orden > luz.orden, 'se agrega al final de su categoría');
-  assert.ok(r.venc[gas.id]);
-  assert.throws(() => G.api_guardarConcepto({ nombre: 'X', seccion: 'Gastos fijos', vence: 'cuando pinte' }), /No entendí/);
+  // Campos sueltos, como al editar una celda
+  const r1 = plano(G.api_guardarConcepto({ id: gas.id, vence: '10 hábil' }));
+  assert.strictEqual(r1.conceptos.find((c) => c.id === gas.id).vence, '10 hábil');
+  assert.ok(r1.venc[gas.id]);
+  assert.strictEqual(r1.conceptos.find((c) => c.id === gas.id).categoria, 'Servicios', 'no pierde los otros campos');
+  G.api_guardarConcepto({ id: gas.id, medio: 'Débito automático' });
+  G.api_guardarConcepto({ id: gas.id, proyeccion: 'Promedio 3 meses' });
+  assert.throws(() => G.api_guardarConcepto({ id: gas.id, vence: 'cuando pinte' }), /No entendí/);
   G.api_guardarCeldas([{ c: gas.id, mes: '2026-09', texto: '30000' }]);
   assert.strictEqual(valor(G.api_datos(), gas.id, '2026-10')[2], 30000);
-  const r2 = plano(G.api_guardarConcepto(Object.assign({}, gas, { nombre: 'Gas natural' })));
-  assert.ok(r2.conceptos.find((c) => c.id === gas.id && c.nombre === 'Gas natural'));
+  const r2 = plano(G.api_guardarConcepto({ id: gas.id, nombre: 'Gas natural' }));
+  assert.ok(r2.conceptos.find((c) => c.id === gas.id && c.nombre === 'Gas natural' && c.medio === 'Débito automático' && c.proyeccion === 'Promedio 3 meses'));
+  // Mover y reordenar
+  const r3 = plano(G.api_moverConcepto(gas.id, -1));
+  const serv = r3.conceptos.filter((c) => c.categoria === 'Servicios').map((c) => c.nombre);
+  assert.deepStrictEqual(serv, ['Gas natural', 'Luz']);
+  const r4 = plano(G.api_moverConceptoA(gas.id, 'Gastos fijos', 'Vivienda'));
+  assert.strictEqual(r4.conceptos.find((c) => c.id === gas.id).categoria, 'Vivienda');
+  assert.ok(r4.categorias.some((c) => c.nombre === 'Vivienda'), 'crea la categoría si no existía');
+  assert.throws(() => G.api_moverConceptoA(gas.id, 'Eventuales', 'Hogar'), /eventuales/);
   G.api_borrarConcepto(gas.id);
   const d = G.api_datos();
   assert.ok(!d.conceptos.find((c) => c.id === gas.id));
   assert.ok(!d.valores.some((v) => v[0] === gas.id));
 });
 
-test('renombrar una categoría de eventuales mueve sus gastos', () => {
-  const viajes = concepto('Viajes');
-  G.api_guardarConcepto(Object.assign({}, viajes, { nombre: 'Viajes y escapadas' }));
-  assert.ok(G.api_datos().movimientos.some((m) => m.categoria === 'Viajes y escapadas'));
+test('categorías: crear, renombrar, color, ordenar y borrar', () => {
+  let r = plano(G.api_guardarCategoria({ seccion: 'Gastos fijos', nombre: 'Salud' }));
+  const salud = r.categorias.find((c) => c.nombre === 'Salud');
+  assert.ok(salud && /^#/.test(salud.color));
+  assert.notStrictEqual(salud.color, r.categorias.find((c) => c.nombre === 'Servicios').color, 'colores distintos');
+  G.api_guardarConcepto({ nombre: 'Prepaga', seccion: 'Gastos fijos', categoria: 'Salud' });
+  r = plano(G.api_guardarCategoria({ seccion: 'Gastos fijos', nombre: 'Salud y bienestar', anterior: 'Salud', color: '#123456' }));
+  assert.ok(r.categorias.find((c) => c.nombre === 'Salud y bienestar' && c.color === '#123456'));
+  assert.strictEqual(r.conceptos.find((c) => c.nombre === 'Prepaga').categoria, 'Salud y bienestar');
+  assert.throws(() => G.api_guardarCategoria({ seccion: 'Gastos fijos', nombre: 'servicios' }), /Ya existe/);
+  assert.throws(() => G.api_borrarCategoria('Gastos fijos', 'Salud y bienestar'), /tiene 1 fila/);
+  const orden0 = r.categorias.filter((c) => c.seccion === 'Gastos fijos').map((c) => c.nombre);
+  r = plano(G.api_moverCategoria('Gastos fijos', orden0[orden0.length - 1], -1));
+  const orden1 = r.categorias.filter((c) => c.seccion === 'Gastos fijos').map((c) => c.nombre);
+  assert.strictEqual(orden1[orden1.length - 2], orden0[orden0.length - 1]);
+  G.api_borrarConcepto(r.conceptos.find((c) => c.nombre === 'Prepaga').id);
+  r = plano(G.api_borrarCategoria('Gastos fijos', 'Salud y bienestar'));
+  assert.ok(!r.categorias.some((c) => c.nombre === 'Salud y bienestar'));
 });
 
-test('movimientos: cuotas, tarjeta al mes siguiente, editar y borrar', () => {
-  const r = plano(G.api_guardarMovimiento({ descripcion: 'Notebook', texto: '900k', categoria: 'Tecnología', cuotas: 6, medio: 'Tarjeta VISA', fecha: '2026-09-20' }));
-  assert.strictEqual(r.movimiento.monto, 900000);
-  assert.strictEqual(r.movimiento.mes, '2026-10');
-  const r2 = plano(G.api_guardarMovimiento({ descripcion: 'Cena', texto: '25000', categoria: 'no existe', fecha: '2026-09-21', medio: 'Efectivo' }));
-  assert.strictEqual(r2.movimiento.categoria, 'Otros');
-  assert.strictEqual(r2.movimiento.mes, '2026-09');
-  G.api_guardarMovimiento(Object.assign({}, r2.movimiento, { texto: '30000' }));
-  assert.strictEqual(G.api_datos().movimientos.find((m) => m.id === r2.movimiento.id).monto, 30000);
-  G.api_borrarMovimiento(r2.movimiento.id);
-  assert.ok(!G.api_datos().movimientos.find((m) => m.id === r2.movimiento.id));
+test('carga rápida de un gasto eventual en cuotas crea una fila', () => {
+  const r = plano(G.api_crearEventual({ nombre: 'Notebook', texto: '900k', categoria: 'Tecnología', cuotas: 6, medio: 'Tarjeta VISA', mes: '2026-10' }));
+  const nb = r.conceptos.find((c) => c.id === r.id);
+  assert.deepStrictEqual([nb.nombre, nb.categoria, nb.tipo, nb.medio], ['Notebook', 'Tecnología', 'eventual', 'Tarjeta VISA']);
+  assert.deepStrictEqual(r.valores[r.id].map((x) => [x[0], x[1]]), [['2026-10', 150000], ['2026-11', 150000], ['2026-12', 150000], ['2027-01', 150000], ['2027-02', 150000], ['2027-03', 150000]]);
+  const r2 = plano(G.api_crearEventual({ nombre: 'Cena', texto: '25000', categoria: 'no existe', mes: '2026-09' }));
+  assert.ok(r2.categorias.some((c) => c.seccion === 'Eventuales' && c.nombre === 'no existe'), 'categoría nueva creada');
+  // Las celdas de eventuales se editan como cualquier otra y no se proyectan
+  G.api_guardarCeldas([{ c: r2.id, mes: '2026-09', texto: '30000' }]);
+  const d = G.api_datos();
+  assert.strictEqual(valor(d, r2.id, '2026-09')[2], 30000);
+  assert.ok(!valor(d, r2.id, '2026-10'));
+  G.api_borrarConcepto(r2.id);
+  G.api_borrarCategoria('Eventuales', 'no existe');
 });
 
 test('tarea diaria: calendario idempotente', () => {
@@ -167,7 +202,7 @@ test('limpieza: detecta y borra las hojas que sobran (nunca las tablas)', () => 
   assert.deepStrictEqual(sobrantes, ['Finanzas', 'Pagos', 'Reservas']);
   const r = plano(G.api_borrarHojas(sobrantes.concat(['Conceptos'])));
   assert.deepStrictEqual(r.borradas.sort(), sobrantes);
-  assert.deepStrictEqual(env.ss.getSheets().map((s) => s.getName()), ['Conceptos', 'Valores', 'Movimientos', 'Indices', 'Feriados', 'Config']);
+  assert.deepStrictEqual(env.ss.getSheets().map((s) => s.getName()), ['Conceptos', 'Valores', 'Categorias', 'Indices', 'Feriados', 'Config']);
   assert.ok(r.respaldo);
 });
 
@@ -209,6 +244,31 @@ test('migra la grilla de la versión 2 conservando estimados y movimientos', () 
   assert.deepStrictEqual(valor(d, sueldo.id, '2026-09').slice(2), [120, '', 0]);
   assert.deepStrictEqual(valor(d, sueldo.id, '2026-11').slice(2), [120, '', 1]);
   assert.deepStrictEqual(valor(d, internet.id, '2026-09').slice(2), [55, '50+5', 0]);
-  assert.deepStrictEqual(d.movimientos.map((m) => [m.descripcion, m.categoria, m.mes, m.cuotas]), [['Silla', 'Hogar', '2026-10', 3], ['Algo', 'Otros', '2026-09', 1]]);
-  assert.ok(env2.ss.getSheetByName('Movimientos (anterior)'), 'la hoja vieja de movimientos queda para limpiar');
+  const silla = d.conceptos.find((c) => c.nombre === 'Silla');
+  assert.strictEqual(silla.categoria, 'Hogar');
+  assert.deepStrictEqual(d.valores.filter((v) => v[0] === silla.id).map((v) => [v[1], v[2]]), [['2026-10', 100000], ['2026-11', 100000], ['2026-12', 100000]]);
+  assert.strictEqual(d.conceptos.find((c) => c.nombre === 'Algo').categoria, 'Otros');
+  assert.ok(env2.ss.getSheetByName('Movimientos'), 'la hoja vieja de movimientos queda para limpiar');
+  assert.ok(G2.api_hojasSobrantes().some((h) => h.nombre === 'Movimientos'));
+});
+
+/* ---------- Escenario 3: base de la versión 3 (tabla Movimientos) ---------- */
+test('actualiza sola una base de la versión 3', () => {
+  const G3 = cargar({ hoy: HOY });
+  const env3 = crearEntorno(G3);
+  const hoja = (nombre, filas) => { const sh = env3.ss.insertSheet(nombre); sh.getRange(1, 1, filas.length, filas[0].length).setValues(filas); };
+  hoja('Conceptos', [['id', 'nombre', 'seccion', 'clase', 'categoria', 'tipo', 'vence', 'medio', 'proyeccion', 'orden'],
+    ['a1', 'Luz', 'Gastos fijos', 'G', 'Servicios', 'fijo', '1er hábil', '', 'Repetir', 10],
+    ['e1', 'Hogar', 'Eventuales', 'G', 'Hogar', 'eventual', '', '', '', 20], ['e2', 'Otros', 'Eventuales', 'G', 'Otros', 'eventual', '', '', '', 30]]);
+  hoja('Valores', [['concepto', 'mes', 'monto', 'cuenta', 'estado'], ['a1', '2026-09', 100, '', 'confirmado']]);
+  hoja('Movimientos', [['id', 'fecha', 'descripcion', 'categoria', 'monto', 'cuenta', 'cuotas', 'medio', 'mes', 'nota'],
+    ['m1', '2026-09-20', 'Silla', 'Hogar', 300000, '', 3, 'Tarjeta VISA', '2026-10', ''], ['m2', '2026-09-21', 'Pizza', 'Otros', 12000, '', 1, '', '2026-09', '']]);
+  const d = plano(G3.api_datos());
+  assert.deepStrictEqual(d.categorias.map((c) => c.seccion + '/' + c.nombre), ['Gastos fijos/Servicios', 'Eventuales/Hogar', 'Eventuales/Otros']);
+  const silla = d.conceptos.find((c) => c.nombre === 'Silla');
+  assert.deepStrictEqual([silla.tipo, silla.categoria, silla.medio], ['eventual', 'Hogar', 'Tarjeta VISA']);
+  assert.strictEqual(d.valores.filter((v) => v[0] === silla.id).length, 3);
+  assert.ok(!d.conceptos.some((c) => c.id === 'e1'), 'las filas-categoría viejas desaparecen');
+  assert.ok(env3.ss.getSheetByName('Movimientos (versión anterior)'));
+  assert.strictEqual(plano(G3.api_datos()).conceptos.length, d.conceptos.length, 'no se repite');
 });

@@ -15,7 +15,6 @@
   <div class="marca">💰 <span>Finanzas</span></div>
   <nav class="nav" id="navApp" role="tablist" hidden>
     <button role="tab" data-v="planilla" aria-selected="true"><span>📋</span>Planilla</button>
-    <button role="tab" data-v="movimientos" aria-selected="false"><span>🧾</span>Movimientos</button>
     <button role="tab" data-v="tablero" aria-selected="false"><span>📊</span>Dashboard</button>
     <button role="tab" data-v="config" aria-selected="false"><span>⚙️</span>Ajustes</button>
   </nav>
@@ -30,38 +29,24 @@
   <!-- PLANILLA -->
   <section id="v-planilla" class="vista" hidden>
     <div class="barra">
+      <div class="selector-mes" role="group" aria-label="Mes a editar">
+        <button class="boton icono" id="bMesAnt" title="Mes anterior" aria-label="Mes anterior">‹</button>
+        <select id="mesFoco" aria-label="Elegí un mes"></select>
+        <button class="boton icono" id="bMesSig" title="Mes siguiente" aria-label="Mes siguiente">›</button>
+        <button class="boton" id="bHoy" title="Volver al mes actual">Hoy</button>
+      </div>
       <div class="rapida">
-        <input id="rapida" autocomplete="off" placeholder="Cargá algo: luz 89.423 · cena 25k · heladera 900k 6 cuotas visa   ( / )" aria-label="Carga rápida">
+        <input id="rapida" autocomplete="off" placeholder="Carga rápida: luz 89.423 · cena 25k · heladera 900k 6 cuotas visa   ( / )" aria-label="Carga rápida">
         <div class="vista-previa" id="previa" hidden></div>
       </div>
-      <button class="boton" id="bHoy" title="Ir al mes actual">🎯 Hoy</button>
+      <button class="boton" id="bDetalles" aria-pressed="true" title="Mostrar u ocultar las columnas Vence y Medio de pago">Vence · Medio</button>
       <div class="leyenda-celdas"><b>1.234</b> cargado <em>1.234</em> estimado</div>
     </div>
     <div class="grilla-wrap">
       <div class="grilla" id="grilla" tabindex="0" aria-label="Planilla de finanzas"></div>
-      <div class="pie num" id="pie"><span id="pieSel">Seleccioná celdas para ver la suma</span><span class="ayuda">Enter editar · Supr borrar · Ctrl+Z deshacer · clic derecho: más opciones</span></div>
+      <div class="pie num" id="pie"><span id="pieSel">Seleccioná celdas para ver la suma</span><span class="ayuda">Enter editar · Supr borrar · Ctrl+Z deshacer · Alt+↑↓ mover fila · clic derecho: más opciones</span></div>
     </div>
     <div class="espacio-pie"></div>
-  </section>
-
-  <!-- MOVIMIENTOS -->
-  <section id="v-movimientos" class="vista scroll" hidden>
-    <div class="contenido">
-      <div class="card">
-        <div style="display:flex;align-items:flex-start;gap:10px;flex-wrap:wrap">
-          <div style="flex:1"><h2>Gastos eventuales</h2><p class="sub">Compras sueltas y en cuotas. Se suman solas en la sección Eventuales de la planilla.</p></div>
-          <button class="boton primario" id="bNuevoMov">＋ Nuevo gasto</button>
-        </div>
-        <div class="filtros-mov">
-          <select id="fMes" aria-label="Mes"></select>
-          <select id="fCat" aria-label="Categoría"></select>
-          <input id="fTxt" placeholder="Buscar…" aria-label="Buscar">
-          <span class="espacio"></span>
-          <span id="fTotal" class="num" style="font-weight:700"></span>
-        </div>
-        <div style="overflow-x:auto"><table class="t" id="tMov"></table></div>
-      </div>
-    </div>
   </section>
 
   <?!= include('Tablero') ?>
@@ -77,14 +62,10 @@
   </section>
 </main>
 
-<div class="velo" id="velo" hidden></div>
-<aside class="panel" id="panel" aria-hidden="true">
-  <header><h2 id="panelTitulo"></h2><button class="cerrar" id="panelCerrar" aria-label="Cerrar">×</button></header>
-  <div class="cuerpo" id="panelCuerpo"></div>
-  <footer id="panelPie"></footer>
-</aside>
 <div class="menu" id="menu" hidden></div>
 <div class="avisos" id="avisos" aria-live="polite"></div>
+<datalist id="dlMedios"></datalist>
+<datalist id="dlVence"><option value="1er hábil"><option value="2do hábil"><option value="5to hábil"><option value="10"><option value="10 hábil"><option value="15"><option value="15 hábil"><option value="20"><option value="último hábil"><option value="anteúltimo hábil"><option value="último día"></datalist>
 
 <?!= include('Nucleo') ?>
 <?!= include('Grilla') ?>

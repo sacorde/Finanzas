@@ -90,14 +90,14 @@ var RENOMBRE_CAT_ = { alquiler: 'Vivienda', super: 'Supermercado' };
 function modeloDesdeLegado(leg, hoy, aprendidas) {
   var mesHoy = isoMes_(hoy);
   var grupos = { I: [], G: [], P: [], A: [] }, ordenCat = [], porCat = {}, movimientos = [];
-  leg.items.forEach(function (it) {
+  leg.items.forEach(function (it, items_i) {
     var s = norm_(it.sec);
     if (/eventual/.test(s)) {
       Object.keys(it.celdas).sort().forEach(function (iso) {
         var c = it.celdas[iso];
         var monto = c.f || c.v;
         if (!monto) return;
-        movimientos.push({ fecha: desdeIsoMes_(iso), desc: it.nombre, cat: adivinarCategoria(it.nombre, aprendidas), monto: monto, cuotas: 1, medio: '', mes: desdeIsoMes_(iso) });
+        movimientos.push({ fecha: desdeIsoMes_(iso), desc: it.nombre, cat: adivinarCategoria(it.nombre, aprendidas), monto: monto, cuotas: 1, medio: '', mes: desdeIsoMes_(iso), grupo: 'L' + items_i });
       });
       return;
     }
@@ -270,36 +270,66 @@ function detectarFuente_(ss) {
   return { tipo: 'plantilla', descripcion: 'una planilla nueva con conceptos de ejemplo' };
 }
 
-/** Convierte filas (SEC/CAT/ITEM) y movimientos al formato de las tablas. Parte pura. */
+/**
+ * Convierte filas (SEC/CAT/ITEM) y gastos eventuales al formato de las tablas. Parte pura.
+ * Cada gasto eventual pasa a ser una fila de la grilla dentro de su categoría (como en el Excel original);
+ * las cuotas se reparten en meses consecutivos.
+ * @return {{conceptos:Array, valores:Array, categorias:Array}}
+ */
 function filasAdb_(filas, movimientos) {
-  var sec = null, cat = null, orden = 0, conceptos = [], valores = [];
-  var eventuales = {};
+  var m = { conceptos: [], valores: {}, categorias: [] };
+  var sec = null, cat = null, orden = 0;
+  var secEv = FZ.SECCIONES.filter(function (s) { return s.tipo === 'eventual'; })[0].nombre;
   filas.forEach(function (f) {
     if (f.tipo === 'SEC') { sec = { nombre: f.nombre, clase: f.clase, tipo: f.mov ? 'eventual' : 'fijo' }; cat = null; return; }
-    if (f.tipo === 'CAT') { cat = f.nombre; return; }
+    if (f.tipo === 'CAT') { cat = f.nombre; if (sec) asegurarCategoria_(m, sec.nombre, cat); return; }
     if (f.tipo !== 'ITEM' || !sec) return;
+    // En las versiones anteriores, las filas de Eventuales eran las categorías
+    if (sec.tipo === 'eventual') { asegurarCategoria_(m, secEv, f.nombre); return; }
     var id = nuevoId_();
     orden += 10;
-    conceptos.push({
-      id: id, nombre: f.nombre, seccion: sec.nombre, clase: sec.clase, categoria: sec.tipo === 'eventual' ? f.nombre : (cat || sec.nombre),
-      tipo: sec.tipo, vence: String(f.vence || ''), medio: f.medio || '', proyeccion: sec.tipo === 'eventual' ? '' : (f.proy || 'Repetir'), orden: orden
-    });
-    if (sec.tipo === 'eventual') { eventuales[f.nombre] = true; return; }
+    m.conceptos.push(normConcepto_({ id: id, nombre: f.nombre, seccion: sec.nombre, categoria: cat || sec.nombre, vence: String(f.vence || ''), medio: f.medio || '', proyeccion: f.proy || 'Repetir', orden: orden }));
+    var porMes = m.valores[id] = {};
     Object.keys(f.celdas || {}).sort().forEach(function (iso) {
       var c = f.celdas[iso];
       var cuenta = c.f ? String(c.f).replace(/^=\+?\s*/, '') : '';
       var monto = cuenta ? (parsearMonto(cuenta) || { valor: Number(c.v) || 0 }).valor : Number(c.v) || 0;
-      valores.push({ concepto: id, mes: iso, monto: monto, cuenta: cuenta, estado: c.proy ? 'estimado' : 'confirmado' });
+      porMes[iso] = { monto: monto, cuenta: cuenta, estado: c.proy ? 'estimado' : 'confirmado' };
     });
   });
-  var movs = (movimientos || []).map(function (m) {
-    var cuenta = typeof m.monto === 'string' && m.monto.charAt(0) === '=' ? m.monto.slice(1) : '';
-    var monto = cuenta ? (parsearMonto(cuenta) || { valor: 0 }).valor : Number(m.monto) || 0;
-    var categoria = eventuales[m.cat] ? m.cat : (eventuales.Otros ? 'Otros' : m.cat);
-    return {
-      id: nuevoId_(), fecha: m.fecha instanceof Date ? isoDia_(m.fecha) : String(m.fecha), descripcion: m.desc, categoria: categoria,
-      monto: monto, cuenta: cuenta, cuotas: m.cuotas || 1, medio: m.medio || '', mes: m.mes instanceof Date ? isoMes_(m.mes) : String(m.mes || ''), nota: m.nota || ''
-    };
-  }).filter(function (m) { return m.monto; });
-  return { conceptos: conceptos, valores: valores, movimientos: movs };
+  (movimientos || []).forEach(function (mv) {
+    var cuenta = typeof mv.monto === 'string' && mv.monto.charAt(0) === '=' ? mv.monto.slice(1) : '';
+    var monto = cuenta ? (parsearMonto(cuenta) || { valor: 0 }).valor : Number(mv.monto) || 0;
+    if (!monto) return;
+    var existe = m.categorias.some(function (c) { return c.seccion === secEv && c.nombre === mv.cat; });
+    var otros = m.categorias.some(function (c) { return c.seccion === secEv && c.nombre === 'Otros'; });
+    agregarEventual_(m, {
+      nombre: mv.desc, categoria: existe || !otros ? mv.cat : 'Otros', medio: mv.medio || '',
+      mes: mv.mes instanceof Date ? isoMes_(mv.mes) : String(mv.mes || '').slice(0, 7), monto: monto, cuenta: cuenta, cuotas: mv.cuotas, grupo: mv.grupo
+    });
+  });
+  return { conceptos: m.conceptos, valores: aplanarValores_(m.valores, m.conceptos), categorias: m.categorias };
+}
+
+/** Agrega una fila de gasto eventual al modelo, repartiendo cuotas. */
+function agregarEventual_(m, p) {
+  var secEv = FZ.SECCIONES.filter(function (s) { return s.tipo === 'eventual'; })[0].nombre;
+  asegurarCategoria_(m, secEv, p.categoria || 'Otros');
+  m._grupos = m._grupos || {};
+  // Varios meses de una misma fila del Excel original siguen siendo una sola fila
+  var c = p.grupo && m._grupos[p.grupo];
+  if (!c) {
+    c = normConcepto_({ id: nuevoId_(), nombre: String(p.nombre || 'Gasto'), seccion: secEv, categoria: p.categoria || 'Otros', medio: p.medio || '', orden: 1e8 + m.conceptos.length });
+    m.conceptos.push(c);
+    if (p.grupo) m._grupos[p.grupo] = c;
+  }
+  var n = Math.max(1, Math.min(60, Number(p.cuotas) || 1));
+  var porMes = m.valores[c.id] = m.valores[c.id] || {};
+  if (!/^\d{4}-\d{2}$/.test(String(p.mes))) return c;
+  for (var k = 0; k < n; k++) {
+    var mes = sumarMes_(p.mes, k);
+    var prev = porMes[mes];
+    porMes[mes] = { monto: Math.round(p.monto / n * 100) / 100 + (prev ? prev.monto : 0), cuenta: n === 1 && !prev ? (p.cuenta || '') : '', estado: 'confirmado' };
+  }
+  return c;
 }

@@ -101,22 +101,57 @@
   .res-et { display: flex; align-items: center; gap: 8px; }
   .res-et i { width: 8px; height: 8px; border-radius: 2px; display: inline-block; }
 
-  table.g tr.sec > * { font-weight: 700; font-size: 12px; letter-spacing: .03em; text-transform: uppercase; height: 34px; cursor: pointer; }
+  table.g tr.sec > * { font-weight: 700; font-size: 12px; letter-spacing: .03em; text-transform: uppercase; height: 36px; border-top: 8px solid var(--surface); }
+  table.g tr.sec .n { cursor: pointer; }
   table.g tr.sec.I > * { background: var(--sec-I-bg); color: var(--sec-I); }
   table.g tr.sec.G > * { background: var(--sec-G-bg); color: var(--sec-G); }
   table.g tr.sec.A > * { background: var(--sec-A-bg); color: var(--sec-A); }
   table.g tr.sec.E > * { background: var(--sec-E-bg); color: var(--sec-E); }
-  table.g tr.cat > * { background: var(--surface2); font-weight: 700; color: var(--ink2); cursor: pointer; }
+  table.g tr.cat > * { background: color-mix(in srgb, var(--cat) 7%, var(--surface)); font-weight: 700; color: var(--ink2); }
+  table.g tr.cat .n { color: var(--cat); box-shadow: inset 4px 0 0 var(--cat); }
+  table.g tr.cat .n .tn { color: var(--cat); }
+  .punto { width: 9px; height: 9px; border-radius: 3px; background: var(--cat); display: inline-block; margin-right: 8px; flex: none; }
+  table.g td.n { display: table-cell; }
+  table.g tr.sec .n, table.g tr.cat .n { padding-right: 6px; }
+  .cuenta-filas { font-size: 11px; font-weight: 600; color: var(--muted); margin-left: 6px; }
+  .mas { border: 1px solid transparent; background: transparent; color: inherit; font-weight: 700; font-size: 14px; line-height: 1; width: 22px; height: 22px; border-radius: 6px; margin-left: 6px; vertical-align: middle; opacity: .55; }
+  .mas.txt { width: auto; font-size: 11px; padding: 0 6px; text-transform: none; letter-spacing: 0; }
+  tr:hover .mas, .mas:focus-visible { opacity: 1; border-color: currentColor; }
+  .mas:hover { background: var(--surface); }
+  .acciones { position: absolute; right: 6px; top: 50%; transform: translateY(-50%); display: flex; gap: 2px; background: inherit; opacity: 0; transition: opacity .12s; }
+  tr.sec:hover .acciones, .acciones:focus-within { opacity: 1; }
+  table.g thead tr.meses th.d { text-transform: uppercase; }
+  table.g thead tr.meses .ayuda-n { text-transform: none; }
+  table.g td.n .caret { cursor: pointer; }
+  table.g tr.nueva td.n { color: var(--muted); font-style: italic; }
+  .placeholder { color: var(--muted); font-style: italic; font-weight: 400; }
+  table.g .d { min-width: 116px; max-width: 150px; overflow: hidden; text-overflow: ellipsis; font-size: 12px; color: var(--ink2); background: var(--surface2); text-align: left; }
+  table.g td.d { cursor: cell; }
+  table.g td.d.off { background: var(--surface3); cursor: default; }
+  table.g thead th.d { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); }
+  table.g th.foco { box-shadow: inset 0 -3px 0 var(--accent); color: var(--accent-ink); }
+  table.g th.hoy.foco { box-shadow: inset 0 -3px 0 #fff; }
+  table.g td.foco:not(.hoy) { box-shadow: inset 0 0 0 9999px color-mix(in srgb, var(--accent) 5%, transparent); }
+  table.g .fin-anio { border-right: 2px solid var(--line); }
+  table.g thead tr.anios th.anio span { position: sticky; left: 262px; padding: 0 8px; }
+  table.g thead tr.anios th.anio { text-align: left; }
+  .ayuda-n { font-size: 11px; font-weight: 500; color: var(--muted); }
+  .selector-mes { display: flex; align-items: center; gap: 4px; }
+  .selector-mes select { border: 1px solid var(--line); background: var(--surface); border-radius: 9px; padding: 7px 10px; font-size: 13px; font-weight: 600; min-width: 170px; }
+  .boton.icono { width: 34px; justify-content: center; padding: 7px 0; font-size: 16px; }
+  #bHoy.activo { background: var(--accent-soft); color: var(--accent-ink); border-color: transparent; }
+  #bDetalles[aria-pressed="true"] { background: var(--surface3); color: var(--ink); }
+  .menu.colores { display: grid; grid-template-columns: repeat(5, 36px); min-width: 0; }
+  .menu.colores hr, .menu.colores button:last-child { grid-column: 1 / -1; }
+  .menu.colores .punto { width: 16px; height: 16px; margin: 0; }
   .caret { display: inline-block; width: 14px; transition: transform .15s; color: var(--muted); }
   .cerrado .caret { transform: rotate(-90deg); }
-  table.g tr.item .n { padding-left: 26px; cursor: pointer; }
-  table.g tr.item.sin-cat .n { padding-left: 14px; }
-  table.g tr.item .n:hover { color: var(--accent-ink); text-decoration: underline; text-underline-offset: 3px; }
+  table.g tr.item .n { padding-left: 24px; cursor: cell; box-shadow: inset 4px 0 0 color-mix(in srgb, var(--cat) 45%, transparent); }
+  table.g tr.item.sin-cat .n { padding-left: 14px; box-shadow: none; }
+  table.g tr.item.ev .n { font-size: 12.5px; }
   table.g tr.item .n small { color: var(--muted); font-weight: 500; margin-left: 6px; font-size: 11px; }
   table.g td.est { color: var(--muted); font-style: italic; }
   table.g td.cta { background-image: linear-gradient(225deg, var(--s4) 5px, transparent 5px); }
-  table.g td.ev { color: var(--ink2); cursor: pointer; }
-  table.g td.ev:hover { text-decoration: underline; text-underline-offset: 3px; }
   table.g td.ed { cursor: cell; }
   table.g td.sel { box-shadow: inset 0 0 0 9999px var(--sel); }
   table.g td.cur { outline: 2px solid var(--accent); outline-offset: -2px; }
@@ -127,6 +162,7 @@
   table.g tr.add .n, table.g tr.addcat .n { padding-left: 26px; cursor: pointer; }
   table.g tr.add .n:hover, table.g tr.addcat .n:hover { color: var(--accent-ink); }
   table.g tr.addcat td { border-bottom: 1px solid var(--line); }
+  .editor.txt { text-align: left; }
   .editor { position: absolute; z-index: 20; border: 2px solid var(--accent); background: var(--surface); padding: 0 8px; font: inherit; font-size: 13px; text-align: right; outline: none; box-shadow: var(--shadow-lg); }
   .pie { display: flex; gap: 16px; align-items: center; padding: 6px 12px; border-top: 1px solid var(--line); font-size: 12px; color: var(--ink2); background: var(--surface2); flex: none; min-height: 32px; }
   .pie b { color: var(--ink); font-variant-numeric: tabular-nums; }
