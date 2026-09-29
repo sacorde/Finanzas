@@ -1,6 +1,6 @@
 {
   "name": "finanzas",
-  "version": "3.0.0",
+  "version": "5.0.0",
   "private": true,
   "description": "Sistema de finanzas personales sobre Google Sheets + Apps Script",
   "scripts": {

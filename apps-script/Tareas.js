@@ -7,6 +7,7 @@
  */
 function tareaDiaria() {
   if (!dbInstalada_()) return;
+  actualizarEsquema_();
   var cfg = leerConfig();
   var hoy = new Date(), mesHoy = isoMes_(hoy);
   var props = PropertiesService.getScriptProperties();

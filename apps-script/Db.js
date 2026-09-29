@@ -10,19 +10,31 @@ function hojaTabla_(nombre) {
   return ss_().getSheetByName(nombre);
 }
 
-/** @return {Array<Object>} filas como objetos (vacío si la tabla no existe). */
+/** Encabezados de la hoja (fila 1). */
+function cabecera_(sh) {
+  if (!sh || sh.getLastColumn() < 1) return [];
+  return sh.getRange(1, 1, 1, sh.getLastColumn()).getValues()[0].map(function (h) { return String(h).trim(); });
+}
+
+/**
+ * @return {Array<Object>} filas como objetos (vacío si la tabla no existe).
+ * Las columnas se leen por su encabezado: una tabla de una versión anterior
+ * (con otras columnas) se lee igual, con todas sus columnas.
+ */
 function leerTabla(nombre) {
   var sh = hojaTabla_(nombre);
   if (!sh || sh.getLastRow() < 2) return [];
-  var cols = ESQUEMA[nombre].cols;
-  var vals = sh.getRange(2, 1, sh.getLastRow() - 1, cols.length).getValues();
+  var cab = cabecera_(sh), cols = ESQUEMA[nombre].cols, texto = ESQUEMA[nombre].texto;
+  var vals = sh.getRange(2, 1, sh.getLastRow() - 1, cab.length).getValues();
   var out = [];
   vals.forEach(function (r) {
     if (r.every(function (v) { return v === '' || v === null; })) return;
     var o = {};
-    cols.forEach(function (c, i) {
+    cols.forEach(function (c) { o[c] = ''; });
+    cab.forEach(function (c, i) {
+      if (!c) return;
       var v = r[i];
-      if (v instanceof Date) v = ESQUEMA[nombre].texto.indexOf(c) >= 0 && /mes/.test(c) ? isoMes_(v) : isoDia_(v);
+      if (v instanceof Date) v = texto.indexOf(c) >= 0 && /mes/.test(c) ? isoMes_(v) : isoDia_(v);
       o[c] = v;
     });
     out.push(o);
@@ -42,6 +54,13 @@ function escribirTabla(nombre, filas) {
       return v;
     });
   });
+  var cab = cabecera_(sh);
+  if (cab.join('|') !== cols.join('|')) {
+    // Tabla de una versión anterior: se reescribe con las columnas nuevas
+    if (sh.getMaxColumns() > cols.length) sh.deleteColumns(cols.length + 1, sh.getMaxColumns() - cols.length);
+    else if (sh.getMaxColumns() < cols.length) sh.insertColumnsAfter(sh.getMaxColumns(), cols.length - sh.getMaxColumns());
+    sh.getRange(1, 1, 1, cols.length).setValues([cols]);
+  }
   var necesarias = datos.length + 1;
   if (sh.getMaxRows() < necesarias) sh.insertRowsAfter(sh.getMaxRows(), necesarias - sh.getMaxRows() + 50);
   var viejas = sh.getLastRow() - 1;
@@ -91,8 +110,8 @@ function conLock_(fn) {
   try { return fn(); } finally { lock.releaseLock(); }
 }
 
-/** ¿La base de datos está instalada? */
+/** ¿La base de datos está instalada? (en cualquier versión: la app la actualiza sola) */
 function dbInstalada_() {
   var sh = hojaTabla_(FZ.T.CONCEPTOS);
-  return !!(sh && esTabla_(sh) && sh.getLastRow() > 1);
+  return !!(sh && sh.getLastRow() > 1 && cabecera_(sh)[0] === 'id');
 }

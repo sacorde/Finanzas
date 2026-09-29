@@ -1,56 +1,63 @@
 /**
- * Finanzas · Categorías de gastos eventuales
- * Sugiere la categoría de un gasto por lo que cargaste antes o por palabras clave.
+ * Finanzas · En qué categoría va cada concepto
+ * Se usa al importar el Excel y al pasar datos de versiones anteriores
+ * (que tenían secciones y subcategorías) a las categorías de un solo nivel.
  */
 
-var PALABRAS_CATEGORIA_ = {
-  'Salidas y comida': ['mc', 'mcdonal', 'burger', 'hamburg', 'hambu', 'empanada', 'pizza', 'bar', 'cerveza', 'cena', 'almuerzo', 'comida', 'resto', 'cafe', 'helado', 'pedidos ya', 'rappi', 'pescadorita', 'sushi', 'parrilla', 'escape', 'cine', 'teatro', 'recital', 'river', 'boca', 'entrada'],
-  'Viajes': ['viaje', 'vuelo', 'hotel', 'airbnb', 'florianopolis', 'mendoza', 'iguazu', 'chalten', 'bariloche', 'brc', 'trekking', 'pasaporte', 'excursion', 'micro', 'aerolineas', 'flybondi', 'booking'],
-  'Ropa y calzado': ['ropa', 'jean', 'remera', 'short', 'zapatilla', 'bikini', 'campera', 'buzo', 'salomon', 'nike', 'adidas', 'anteojo', 'rayban', 'medias', 'zapato'],
-  'Tecnología': ['samsung', 's24', 's20', 'celular', 'iphone', 'notebook', 'compaq', 'disco', 'ssd', 'monitor', 'teclado', 'mouse', 'auricular', 'juego', 'alan wake', 'steam', 'playstation', 'ps5', 'xbox', 'tablet', 'cargador'],
-  'Hogar': ['mueble', 'heladera', 'lavarropas', 'silla', 'escritorio', 'colchon', 'sillon', 'cortina', 'quinta', 'ferreteria', 'pintura', 'envio mueble', 'bazar', 'sommier', 'microondas'],
-  'Salud y cuidado': ['farmacia', 'medico', 'dentista', 'odontolog', 'implante', 'capilar', 'perfume', 'cortadora', 'peluqueria', 'psicolog', 'estudio', 'remedio', 'optica', 'kinesio'],
-  'Regalos': ['regalo', 'cumple', 'prote', 'protes'],
-  'Educación': ['matricula', 'curso', 'libro', 'utn', 'istea', 'facultad', 'copy', 'fotocopia', 'udemy', 'cuota colegio'],
-  'Auto y transporte': ['arreglo auto', 'auto', 'mecanico', 'gomeria', 'service', 'vtv', 'peaje', 'estacionamiento', 'cochera', 'uber', 'cabify', 'taxi', 'multa']
+/** Nombres de categorías viejas → categoría nueva. */
+var SINONIMOS_CATEGORIA_ = {
+  'Ingresos': ['ingreso', 'ingresos', 'sueldo', 'sueldos', 'salario'],
+  'Vivienda': ['vivienda', 'casa', 'hogar', 'alquiler', 'depto', 'departamento'],
+  'Servicios': ['servicio', 'servicios', 'impuestos', 'impuesto'],
+  'Suscripciones': ['suscripcion', 'suscripciones', 'streaming'],
+  'Transporte': ['transporte', 'auto', 'autos', 'movilidad', 'vehiculo', 'moto', 'auto y transporte'],
+  'Supermercado': ['super', 'supermercado', 'alimentos', 'almacen', 'comida'],
+  'Préstamos': ['prestamo', 'prestamos', 'deuda', 'deudas', 'credito', 'creditos', 'prestamos y deudas'],
+  'Ahorro e Inversión': ['ahorro', 'ahorros', 'inversion', 'inversiones', 'ahorro e inversion'],
+  'Eventuales': ['eventual', 'eventuales', 'varios']
 };
 
-/**
- * Adivina la categoría de un gasto.
- * 1) Lo que ya cargaste antes con la misma descripción (aprendizaje).
- * 2) Palabras clave.  3) "Otros".
- */
-function adivinarCategoria(desc, aprendidas) {
-  var d = norm_(desc);
-  if (!d) return 'Otros';
-  if (aprendidas) {
-    if (aprendidas[d]) return aprendidas[d];
-    var primera = d.split(' ')[0];
-    if (primera.length > 2 && aprendidas['#' + primera]) return aprendidas['#' + primera];
-  }
-  var mejor = null, largo = 0;
-  Object.keys(PALABRAS_CATEGORIA_).forEach(function (cat) {
-    PALABRAS_CATEGORIA_[cat].forEach(function (p) {
-      var hay = p.length <= 3 ? new RegExp('(^|[^a-z0-9])' + p + '([^a-z0-9]|$)').test(d) : d.indexOf(p) >= 0;
-      if (hay && p.length > largo) { mejor = cat; largo = p.length; }
-    });
-  });
-  return mejor || 'Otros';
+/** Palabras en el nombre del concepto → categoría (cuando la categoría vieja no alcanza). */
+var PALABRAS_FIJOS_ = {
+  'Vivienda': ['alquiler', 'expensa', 'hipoteca', 'abl', 'inmobiliario', 'seguro incendio', 'seguro hogar', 'mantenimiento'],
+  'Servicios': ['luz', 'gas', 'agua', 'internet', 'celular', 'telefono', 'personal', 'movistar', 'claro', 'tuenti', 'edenor', 'edesur',
+    'metrogas', 'naturgy', 'aysa', 'cable', 'fibertel', 'telecentro', 'impuesto'],
+  'Suscripciones': ['netflix', 'spotify', 'youtube', 'disney', 'hbo', 'max', 'prime', 'amazon', 'apple', 'google one', 'icloud', 'crunchyroll',
+    'paramount', 'mercadolibre nivel', 'meli+', 'pedidos ya plus', 'chatgpt', 'gym', 'gimnasio', 'sportclub', 'megatlon', 'crossfit'],
+  'Transporte': ['nafta', 'sube', 'auto', 'patente', 'seguro auto', 'peaje', 'estacionamiento', 'cochera', 'colectivo', 'tren', 'subte', 'uber', 'cabify'],
+  'Supermercado': ['super', 'coto', 'carrefour', 'jumbo', 'disco', 'vea', 'changomas', 'verduleria', 'carniceria', 'almacen', 'dia'],
+  'Préstamos': ['prestamo', 'credito', 'deuda', 'refinanciacion'],
+  'Ahorro e Inversión': ['ahorro', 'inversion', 'plazo fijo', 'fci', 'cedear']
+};
+
+function contienePalabra_(texto, p) {
+  return p.length <= 3 ? new RegExp('(^|[^a-z0-9])' + p.replace(/[+]/g, '\\+') + '([^a-z0-9]|$)').test(texto) : texto.indexOf(p) >= 0;
 }
 
-/** Mapa de aprendizaje a partir de movimientos existentes ({descripcion, categoria}). */
-function aprenderCategorias_(movs) {
-  var mapa = {}, conteo = {};
-  movs.forEach(function (m) {
-    var d = norm_(m.descripcion), c = String(m.categoria || '');
-    if (!d || !c) return;
-    mapa[d] = c;
-    var p = '#' + d.split(' ')[0];
-    conteo[p] = conteo[p] || {};
-    conteo[p][c] = (conteo[p][c] || 0) + 1;
+/**
+ * Categoría nueva para un concepto de una versión anterior.
+ * @param {{seccion:string, categoria:string, nombre:string, clase:string, tipo:string}} c
+ * @return {string} nombre de la categoría
+ */
+function mapearCategoria_(c) {
+  if (c.tipo === 'eventual') return 'Eventuales';
+  if (c.clase === 'I') return 'Ingresos';
+  if (c.clase === 'A') return 'Ahorro e Inversión';
+  var cat = norm_(c.categoria), sec = norm_(c.seccion);
+  var porNombre = function (texto) {
+    var elegida = null;
+    Object.keys(SINONIMOS_CATEGORIA_).forEach(function (k) { if (!elegida && SINONIMOS_CATEGORIA_[k].indexOf(texto) >= 0) elegida = k; });
+    return elegida;
+  };
+  var r = cat && cat !== sec ? porNombre(cat) : null;
+  if (r) return r;
+  if (/prestamo|deuda/.test(sec)) return 'Préstamos';
+  var n = norm_(c.nombre), mejor = null, largo = 0;
+  Object.keys(PALABRAS_FIJOS_).forEach(function (k) {
+    PALABRAS_FIJOS_[k].forEach(function (p) { if (p.length > largo && contienePalabra_(n, p)) { mejor = k; largo = p.length; } });
   });
-  Object.keys(conteo).forEach(function (p) {
-    mapa[p] = Object.keys(conteo[p]).sort(function (a, b) { return conteo[p][b] - conteo[p][a]; })[0];
-  });
-  return mapa;
+  if (mejor) return mejor;
+  // Una categoría propia que no está en la lista se conserva como categoría
+  if (cat && cat !== sec && cat !== 'otros fijos') return String(c.categoria).trim();
+  return porNombre(sec) || 'Servicios';
 }

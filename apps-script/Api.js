@@ -34,13 +34,10 @@ function api_datos() {
     config: cfgRaw,
     cfgDef: CFG_DEF,
     cfg: leerConfig(),
-    secciones: FZ.SECCIONES,
     proyecciones: FZ.PROY,
     colores: COLORES_CAT,
     venc: vencimientos_(m.conceptos, hoy),
     inflEsperada: Math.round(inflacionEsperada_(indices) * 1000) / 10,
-    palabras: PALABRAS_CATEGORIA_,
-    aprendidas: aprenderCategorias_(m.conceptos.filter(function (c) { return c.tipo === 'eventual'; }).map(function (c) { return { descripcion: c.nombre, categoria: c.categoria }; })),
     urlPlanilla: ss_().getUrl()
   };
 }
@@ -99,25 +96,25 @@ function api_guardarCeldas(cambios) {
 
 /**
  * Crea un concepto o cambia algunos de sus campos (nombre, categoria, vence, medio, proyeccion).
- * Para crear: {nombre, seccion, categoria}. Para cambiar: {id, ...campos}.
+ * Para crear: {nombre, categoria}. Para cambiar: {id, ...campos}.
  */
 function api_guardarConcepto(c) {
   return conLock_(function () {
     var m = cargarModelo_();
     var existente = c.id ? m.conceptos.filter(function (x) { return x.id === c.id; })[0] : null;
     if (c.id && !existente) throw new Error('Ese concepto ya no existe. Recargá la página.');
-    var base = existente || { id: nuevoId_(), seccion: c.seccion, categoria: c.categoria, orden: 1e9 };
+    var base = existente || { id: nuevoId_(), categoria: c.categoria, orden: 1e9 };
     var datos = {};
-    ['id', 'nombre', 'seccion', 'categoria', 'vence', 'medio', 'proyeccion', 'orden'].forEach(function (k) { datos[k] = c.hasOwnProperty(k) && k !== 'id' && k !== 'orden' ? c[k] : base[k]; });
+    ['id', 'nombre', 'categoria', 'vence', 'medio', 'proyeccion', 'orden'].forEach(function (k) { datos[k] = c.hasOwnProperty(k) && k !== 'id' && k !== 'orden' ? c[k] : base[k]; });
     datos.nombre = String(datos.nombre || '').trim();
     if (!datos.nombre) throw new Error('El concepto necesita un nombre.');
-    var sec = seccionPorNombre_(datos.seccion);
-    if (!sec) throw new Error('Sección desconocida: ' + datos.seccion);
-    datos.categoria = String(datos.categoria || '').trim() || sec.nombre;
+    var cat = buscarCategoria_(m.categorias, datos.categoria);
+    if (!cat) throw new Error('No existe la categoría "' + datos.categoria + '".');
+    if (existente && cat.tipo !== existente.tipo) throw new Error('Los gastos eventuales solo van en ' + (existente.tipo === 'eventual' ? existente.categoria : 'la categoría de eventuales') + '.');
+    if (existente && cat.nombre !== existente.categoria) datos.orden = 1e9;
     var regla = parsearRegla(datos.vence);
     if (regla && regla.error) throw new Error(regla.error);
-    asegurarCategoria_(m, sec.nombre, datos.categoria);
-    var nuevo = normConcepto_(datos);
+    var nuevo = normConcepto_(datos, m.categorias);
     if (existente) m.conceptos[m.conceptos.indexOf(existente)] = nuevo; else m.conceptos.push(nuevo);
     guardarConceptos_(m);
     if (!existente || c.hasOwnProperty('proyeccion')) { reproyectar_(m, [nuevo.id]); guardarValores_(m); }
@@ -145,7 +142,7 @@ function api_moverConcepto(id, dir) {
     renumerar_(m);
     var c = m.conceptos.filter(function (x) { return x.id === id; })[0];
     if (!c) return estructura_(m);
-    var grupo = m.conceptos.filter(function (x) { return x.seccion === c.seccion && x.categoria === c.categoria; });
+    var grupo = m.conceptos.filter(function (x) { return x.categoria === c.categoria; });
     var i = grupo.indexOf(c), j = i + dir;
     if (j >= 0 && j < grupo.length) { var o = grupo[j].orden; grupo[j].orden = c.orden; c.orden = o; }
     guardarConceptos_(m);
@@ -153,64 +150,53 @@ function api_moverConcepto(id, dir) {
   });
 }
 
-/** Mueve un concepto a otra categoría (dentro de secciones del mismo tipo). */
-function api_moverConceptoA(id, seccion, categoria) {
-  return conLock_(function () {
-    var m = cargarModelo_();
-    var c = m.conceptos.filter(function (x) { return x.id === id; })[0];
-    var sec = seccionPorNombre_(seccion);
-    if (!c || !sec) throw new Error('No encontré el concepto o la sección.');
-    if (sec.tipo !== c.tipo) throw new Error('Los gastos eventuales solo se mueven entre categorías de Eventuales.');
-    asegurarCategoria_(m, sec.nombre, categoria);
-    var nuevo = normConcepto_(Object.assign({}, c, { seccion: sec.nombre, categoria: categoria || sec.nombre, orden: 1e9 }));
-    m.conceptos[m.conceptos.indexOf(c)] = nuevo;
-    guardarConceptos_(m);
-    return estructura_(m);
-  });
+/** Mueve un concepto a otra categoría (del mismo tipo: fijo o eventual). */
+function api_moverConceptoA(id, categoria) {
+  return api_guardarConcepto({ id: id, categoria: categoria });
 }
 
-/** Crea, renombra o cambia el color de una categoría. {seccion, nombre, anterior?, color?} */
+/** Crea, renombra o cambia el color o la clase (I/G/A) de una categoría. {nombre, anterior?, color?, clase?} */
 function api_guardarCategoria(p) {
   return conLock_(function () {
     var m = cargarModelo_();
-    var sec = seccionPorNombre_(p.seccion);
     var nombre = String(p.nombre || '').trim();
-    if (!sec || !nombre) throw new Error('La categoría necesita un nombre.');
-    if (norm_(nombre) === norm_(sec.nombre)) throw new Error('Elegí un nombre distinto al de la sección.');
-    var cat = p.anterior ? m.categorias.filter(function (c) { return c.seccion === sec.nombre && c.nombre === p.anterior; })[0] : null;
-    var choca = m.categorias.filter(function (c) { return c.seccion === sec.nombre && norm_(c.nombre) === norm_(nombre) && c !== cat; })[0];
-    if (choca) throw new Error('Ya existe la categoría "' + choca.nombre + '".');
+    if (!nombre) throw new Error('La categoría necesita un nombre.');
+    var cat = p.anterior ? buscarCategoria_(m.categorias, p.anterior) : null;
+    var choca = buscarCategoria_(m.categorias, nombre);
+    if (choca && choca !== cat) throw new Error('Ya existe la categoría "' + choca.nombre + '".');
     if (cat) {
-      m.conceptos.forEach(function (x) { if (x.seccion === sec.nombre && x.categoria === cat.nombre) x.categoria = nombre; });
+      m.conceptos.forEach(function (x) { if (x.categoria === cat.nombre) x.categoria = nombre; });
       cat.nombre = nombre;
-      if (p.color) cat.color = p.color;
     } else {
-      cat = asegurarCategoria_(m, sec.nombre, nombre);
-      if (p.color) cat.color = p.color;
+      cat = asegurarCategoria_(m, nombre, { clase: p.clase || 'G', tipo: 'fijo' });
+    }
+    if (p.color) cat.color = String(p.color);
+    if (/^[IGA]$/.test(String(p.clase || ''))) {
+      cat.clase = String(p.clase);
+      m.conceptos.forEach(function (x) { if (x.categoria === cat.nombre) x.clase = cat.clase; });
     }
     guardarConceptos_(m);
     return estructura_(m);
   });
 }
 
-function api_borrarCategoria(seccion, nombre) {
+function api_borrarCategoria(nombre) {
   return conLock_(function () {
     var m = cargarModelo_();
-    var n = m.conceptos.filter(function (x) { return x.seccion === seccion && x.categoria === nombre; }).length;
+    var n = m.conceptos.filter(function (x) { return x.categoria === nombre; }).length;
     if (n) throw new Error('"' + nombre + '" tiene ' + n + ' fila(s). Borralas o movelas a otra categoría primero.');
-    m.categorias = m.categorias.filter(function (c) { return !(c.seccion === seccion && c.nombre === nombre); });
+    m.categorias = m.categorias.filter(function (c) { return c.nombre !== nombre; });
     guardarConceptos_(m);
     return estructura_(m);
   });
 }
 
-function api_moverCategoria(seccion, nombre, dir) {
+function api_moverCategoria(nombre, dir) {
   return conLock_(function () {
     var m = cargarModelo_();
     renumerar_(m);
-    var grupo = m.categorias.filter(function (c) { return c.seccion === seccion; });
-    var i = grupo.map(function (c) { return c.nombre; }).indexOf(nombre), j = i + dir;
-    if (i >= 0 && j >= 0 && j < grupo.length) { var o = grupo[j].orden; grupo[j].orden = grupo[i].orden; grupo[i].orden = o; }
+    var i = m.categorias.map(function (c) { return c.nombre; }).indexOf(nombre), j = i + dir;
+    if (i >= 0 && j >= 0 && j < m.categorias.length) { var o = m.categorias[j].orden; m.categorias[j].orden = m.categorias[i].orden; m.categorias[i].orden = o; }
     guardarConceptos_(m);
     return estructura_(m);
   });
@@ -218,17 +204,15 @@ function api_moverCategoria(seccion, nombre, dir) {
 
 /**
  * Crea una fila de gasto eventual con su monto (y cuotas) en un paso. Lo usa la carga rápida.
- * {nombre, categoria, medio, mes:'YYYY-MM', texto, cuotas}
+ * {nombre, medio, mes:'YYYY-MM', texto, cuotas}
  */
 function api_crearEventual(p) {
   return conLock_(function () {
     var m = cargarModelo_();
     var monto = parsearMonto(p.texto);
     if (!monto) throw new Error('No entendí el monto "' + p.texto + '"');
-    var sec = FZ.SECCIONES.filter(function (s) { return s.tipo === 'eventual'; })[0];
-    var categoria = String(p.categoria || '').trim() || 'Otros';
-    asegurarCategoria_(m, sec.nombre, categoria);
-    var c = normConcepto_({ id: nuevoId_(), nombre: String(p.nombre || '').trim() || 'Gasto', seccion: sec.nombre, categoria: categoria, medio: p.medio || '', orden: 1e9 });
+    var cat = categoriaEventual_(m);
+    var c = normConcepto_({ id: nuevoId_(), nombre: String(p.nombre || '').trim() || 'Gasto', categoria: cat.nombre, medio: p.medio || '', orden: 1e9 }, m.categorias);
     m.conceptos.push(c);
     var n = Math.max(1, Math.min(60, Number(p.cuotas) || 1));
     var mes = /^\d{4}-\d{2}$/.test(String(p.mes)) ? p.mes : isoMes_(new Date());

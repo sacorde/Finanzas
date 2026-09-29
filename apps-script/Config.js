@@ -6,23 +6,33 @@
  */
 
 var FZ = {
-  VERSION: '4.0.0',
+  VERSION: '5.0.0',
   T: { CONCEPTOS: 'Conceptos', VALORES: 'Valores', CAT: 'Categorias', IND: 'Indices', FER: 'Feriados', CFG: 'Config' },
   PROY: ['Repetir', 'Promedio 3 meses', 'Ajustar por inflación', 'No proyectar'],
-  SECCIONES: [
-    { nombre: 'Ingresos', clase: 'I', tipo: 'fijo' },
-    { nombre: 'Gastos fijos', clase: 'G', tipo: 'fijo' },
-    { nombre: 'Préstamos y deudas', clase: 'G', tipo: 'fijo' },
-    { nombre: 'Ahorro e inversión', clase: 'A', tipo: 'fijo' },
-    { nombre: 'Eventuales', clase: 'G', tipo: 'eventual' }
-  ]
+  /**
+   * Categorías de la planilla (un solo nivel: categoría → filas).
+   * clase: I ingreso · G gasto · A ahorro. tipo: fijo (se proyecta) · eventual (una fila por gasto).
+   */
+  CATEGORIAS: [
+    { nombre: 'Ingresos', clase: 'I', tipo: 'fijo', color: '#138A62' },
+    { nombre: 'Vivienda', clase: 'G', tipo: 'fijo', color: '#2A78D6' },
+    { nombre: 'Servicios', clase: 'G', tipo: 'fijo', color: '#B7791F' },
+    { nombre: 'Suscripciones', clase: 'G', tipo: 'fijo', color: '#5B45C2' },
+    { nombre: 'Transporte', clase: 'G', tipo: 'fijo', color: '#0E7490' },
+    { nombre: 'Supermercado', clase: 'G', tipo: 'fijo', color: '#D9531E' },
+    { nombre: 'Préstamos', clase: 'G', tipo: 'fijo', color: '#C53030' },
+    { nombre: 'Ahorro e Inversión', clase: 'A', tipo: 'fijo', color: '#7C5E10' },
+    { nombre: 'Eventuales', clase: 'G', tipo: 'eventual', color: '#C2447A' }
+  ],
+  /** Filas que siempre tiene Ingresos. */
+  INGRESOS: ['Salario', 'Aguinaldo', 'Bonos', 'Otros']
 };
 
 /** Columnas de cada tabla. `texto`: columnas que se guardan como texto plano (evita que Sheets las convierta en fechas o fórmulas). */
 var ESQUEMA = {
-  Conceptos: { cols: ['id', 'nombre', 'seccion', 'clase', 'categoria', 'tipo', 'vence', 'medio', 'proyeccion', 'orden'], texto: ['id', 'nombre', 'seccion', 'clase', 'categoria', 'tipo', 'vence', 'medio', 'proyeccion'] },
+  Conceptos: { cols: ['id', 'nombre', 'categoria', 'clase', 'tipo', 'vence', 'medio', 'proyeccion', 'orden'], texto: ['id', 'nombre', 'categoria', 'clase', 'tipo', 'vence', 'medio', 'proyeccion'] },
   Valores: { cols: ['concepto', 'mes', 'monto', 'cuenta', 'estado'], texto: ['concepto', 'mes', 'cuenta', 'estado'] },
-  Categorias: { cols: ['seccion', 'nombre', 'color', 'orden'], texto: ['seccion', 'nombre', 'color'] },
+  Categorias: { cols: ['nombre', 'clase', 'tipo', 'color', 'orden'], texto: ['nombre', 'clase', 'tipo', 'color'] },
   Indices: { cols: ['mes', 'inflacion', 'dolar_oficial', 'dolar_blue', 'origen'], texto: ['mes', 'origen'] },
   Feriados: { cols: ['fecha', 'nombre', 'origen'], texto: ['fecha', 'nombre', 'origen'] },
   Config: { cols: ['clave', 'valor', 'descripcion'], texto: ['clave', 'valor', 'descripcion'] }
@@ -32,7 +42,7 @@ var ESQUEMA = {
 var ESQUEMA_MOV_V3 = ['id', 'fecha', 'descripcion', 'categoria', 'monto', 'cuenta', 'cuotas', 'medio', 'mes', 'nota'];
 
 /** Colores de categoría (legibles como texto sobre blanco y sobre oscuro). */
-var COLORES_CAT = ['#2A78D6', '#D9531E', '#138A62', '#B7791F', '#C2447A', '#2F7D32', '#5B45C2', '#C53030', '#0E7490', '#7C5E10'];
+var COLORES_CAT = ['#138A62', '#2A78D6', '#B7791F', '#5B45C2', '#0E7490', '#D9531E', '#C53030', '#7C5E10', '#C2447A', '#2F7D32', '#475467', '#9E3FB5'];
 
 var MESES_ES = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
 

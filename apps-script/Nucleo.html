@@ -48,22 +48,6 @@ function montoP(texto) {
   return { valor: Math.round(valor * 100) / 100, cuenta: esCuenta ? toks.map(String).join('') : '' };
 }
 
-function adivinarP(desc, aprendidas, palabras) {
-  var d = normP(desc);
-  if (!d) return 'Otros';
-  if (aprendidas && aprendidas[d]) return aprendidas[d];
-  var primera = d.split(' ')[0];
-  if (aprendidas && primera.length > 2 && aprendidas['#' + primera]) return aprendidas['#' + primera];
-  var mejor = null, largo = 0;
-  Object.keys(palabras || {}).forEach(function (cat) {
-    palabras[cat].forEach(function (p) {
-      var hay = p.length <= 3 ? new RegExp('(^|[^a-z0-9])' + p + '([^a-z0-9]|$)').test(d) : d.indexOf(p) >= 0;
-      if (hay && p.length > largo) { mejor = cat; largo = p.length; }
-    });
-  });
-  return mejor || 'Otros';
-}
-
 /** Busca conceptos fijos parecidos a la descripción. Devuelve los candidatos ordenados. */
 function buscarItems(desc, items) {
   var d = normP(desc);
@@ -85,11 +69,11 @@ var MEDIOS_CLAVE = { visa: 'visa', amex: 'amex', master: 'master', mastercard: '
 /**
  * Interpreta "heladera 900k 6 cuotas visa" o "luz 89.423 oct".
  * @param {string} texto
- * @param {{hoy:string, items:Array, medios:Array, meses:Array, aprendidas:Object, palabras:Object}} ctx
+ * @param {{hoy:string, items:Array, medios:Array, meses:Array}} ctx
  */
 function interpretar(texto, ctx) {
   var t = ' ' + String(texto || '').trim() + ' ';
-  var r = { desc: '', monto: null, montoTexto: '', cuotas: 1, medio: '', mes: '', fecha: '', candidatos: [], tipo: 'mov', categoria: '' };
+  var r = { desc: '', monto: null, montoTexto: '', cuotas: 1, medio: '', mes: '', fecha: '', candidatos: [], tipo: 'mov' };
   var m;
   // Cuotas: "6 cuotas", "en 6", "6c", "x6"
   if ((m = /\s(?:en\s+)?(\d{1,2})\s*(?:cuotas?|ctas?|c)(?=\s)/i.exec(t)) || (m = /\s(?:x|en\s)\s?(\d{1,2})(?=\s)/i.exec(t))) {
@@ -146,7 +130,6 @@ function interpretar(texto, ctx) {
   r.desc = toks.join(' ').trim();
   r.candidatos = buscarItems(r.desc, ctx.items || []);
   if (r.candidatos.length) r.tipo = 'fijo';
-  r.categoria = adivinarP(r.desc, ctx.aprendidas, ctx.palabras);
   return r;
 }
 
@@ -190,39 +173,45 @@ function indexarValoresP(filas) {
 }
 
 /**
- * Filas de la grilla: sección → conceptos sin categoría → cada categoría con sus conceptos.
- * @param {Object} opts {colapsadas:{key:true}, visible:function(concepto):bool, nuevos:[{t:'nuevo'|'nuevacat', seccion, categoria}]}
+ * Filas de la grilla: cada categoría (con su color) y debajo sus conceptos.
+ * @param {Object} opts {colapsadas:{nombre:true}, visible:function(concepto):bool, nuevos:[{t:'nuevo', categoria}|{t:'nuevacat'}]}
  */
-function construirFilas(conceptos, categorias, secciones, opts) {
+function construirFilas(conceptos, categorias, opts) {
   opts = opts || {};
   var colapsadas = opts.colapsadas || {}, visible = opts.visible || function () { return true; }, nuevos = opts.nuevos || [];
-  var filas = [];
-  var todas = secciones.slice();
-  conceptos.forEach(function (c) { if (!todas.some(function (s) { return s.nombre === c.seccion; })) todas.push({ nombre: c.seccion, clase: c.clase, tipo: c.tipo }); });
   var orden = function (a, b) { return a.orden - b.orden; };
-  todas.forEach(function (sec) {
-    var cs = conceptos.filter(function (c) { return c.seccion === sec.nombre; }).sort(orden);
-    var cats = categorias.filter(function (c) { return c.seccion === sec.nombre; }).sort(orden).slice();
-    cs.forEach(function (c) {
-      if (c.categoria !== sec.nombre && !cats.some(function (k) { return k.nombre === c.categoria; })) cats.push({ seccion: sec.nombre, nombre: c.categoria, color: '', orden: 1e9 });
-    });
-    var kS = 's:' + sec.nombre;
-    filas.push({ t: 'sec', sec: sec, key: kS, conceptos: cs, conCategorias: cats.length > 0 });
-    if (colapsadas[kS]) return;
-    var directos = cs.filter(function (c) { return c.categoria === sec.nombre; });
-    directos.forEach(function (c) { if (visible(c)) filas.push({ t: 'item', c: c, sec: sec, cat: null }); });
-    nuevos.forEach(function (n) { if (n.t === 'nuevo' && n.seccion === sec.nombre && n.categoria === sec.nombre) filas.push({ t: 'nuevo', sec: sec, categoria: sec.nombre, cat: null }); });
-    cats.forEach(function (cat) {
-      var kC = 'c:' + sec.nombre + '/' + cat.nombre;
-      var items = cs.filter(function (c) { return c.categoria === cat.nombre; });
-      filas.push({ t: 'cat', sec: sec, cat: cat, key: kC, conceptos: items });
-      if (colapsadas[kC]) return;
-      items.forEach(function (c) { if (visible(c)) filas.push({ t: 'item', c: c, sec: sec, cat: cat }); });
-      nuevos.forEach(function (n) { if (n.t === 'nuevo' && n.seccion === sec.nombre && n.categoria === cat.nombre) filas.push({ t: 'nuevo', sec: sec, categoria: cat.nombre, cat: cat }); });
-    });
-    nuevos.forEach(function (n) { if (n.t === 'nuevacat' && n.seccion === sec.nombre) filas.push({ t: 'nuevacat', sec: sec }); });
+  var cats = categorias.slice().sort(orden);
+  conceptos.forEach(function (c) {
+    if (!cats.some(function (k) { return k.nombre === c.categoria; })) cats.push({ nombre: c.categoria, clase: c.clase, tipo: c.tipo, color: '', orden: 1e9 });
   });
+  var filas = [];
+  cats.forEach(function (cat) {
+    var items = conceptos.filter(function (c) { return c.categoria === cat.nombre; }).sort(orden);
+    filas.push({ t: 'cat', cat: cat, key: cat.nombre, conceptos: items });
+    if (colapsadas[cat.nombre]) return;
+    items.forEach(function (c) { if (visible(c)) filas.push({ t: 'item', c: c, cat: cat }); });
+    nuevos.forEach(function (n) { if (n.t === 'nuevo' && n.categoria === cat.nombre) filas.push({ t: 'nuevo', categoria: cat.nombre, cat: cat }); });
+  });
+  nuevos.forEach(function (n) { if (n.t === 'nuevacat') filas.push({ t: 'nuevacat' }); });
   return filas;
+}
+
+var ABREV_MEDIO = { 'debito automatico': 'Déb. aut.', transferencia: 'Transf.', efectivo: 'Efectivo', 'mercado pago': 'MP' };
+
+/** Resumen corto de vencimiento, medio de pago y proyección, para mostrar junto al nombre. */
+function resumenConcepto(c) {
+  var partes = [];
+  var v = String(c.vence || '').trim();
+  if (v && c.tipo === 'fijo') {
+    v = /^\d{1,2}$/.test(v) ? 'día ' + v : v.replace(/anteúltimo|anteultimo/i, 'anteúlt.').replace(/último|ultimo/i, 'últ.').replace(/hábil|habil/i, 'háb.').replace(/\s*día$/i, ' día');
+    partes.push(v);
+  }
+  var m = String(c.medio || '').trim();
+  if (m) partes.push(ABREV_MEDIO[normP(m)] || m.replace(/^tarjeta\s+/i, ''));
+  if (c.tipo === 'fijo' && c.proyeccion === 'Promedio 3 meses') partes.push('prom.');
+  else if (c.tipo === 'fijo' && c.proyeccion === 'Ajustar por inflación') partes.push('+infl.');
+  else if (c.tipo === 'fijo' && c.proyeccion === 'No proyectar') partes.push('no se repite');
+  return partes.join(' · ');
 }
 
 /** "900k 6c", "900000 x6", "900k en 6 cuotas" → {texto:'900k', cuotas:6}; null si no hay cuotas. */
@@ -324,7 +313,7 @@ function datosTablero(st) {
   var meses = st.meses;
   var items = st.conceptos.map(function (c) {
     return {
-      nombre: c.nombre, seccion: c.seccion, categoria: c.categoria, clase: c.clase, mov: c.tipo === 'eventual', medio: c.medio,
+      nombre: c.nombre, categoria: c.categoria, clase: c.clase, mov: c.tipo === 'eventual', medio: c.medio,
       v: meses.map(function (m) { var y = st.V[c.id] && st.V[c.id][m]; return y ? Math.round(y.m) : null; }),
       e: meses.map(function (m) { var y = st.V[c.id] && st.V[c.id][m]; return y && y.e ? 1 : 0; })
     };
@@ -343,7 +332,9 @@ function datosTablero(st) {
     if (f && f >= hoy && v && v.m) proximos.push({ nombre: c.nombre, fecha: f, valor: v.m, estimado: !!v.e });
   });
   proximos.sort(function (a, b) { return a.fecha < b.fecha ? -1 : 1; });
-  return { generado: hoy, mesActual: mesHoy, meses: meses, items: items, inflacion: infl, oficial: oficial, blue: blue,
+  var colores = {};
+  (st.categorias || []).forEach(function (c) { colores[c.nombre] = c.color; });
+  return { generado: hoy, mesActual: mesHoy, meses: meses, items: items, colores: colores, inflacion: infl, oficial: oficial, blue: blue,
     inflEsperada: st.inflEsperada, dolar: st.cfg.dolar, proximos: proximos.slice(0, 8) };
 }
 // </nucleo>

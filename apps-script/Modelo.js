@@ -1,41 +1,59 @@
 /**
  * Finanzas · Modelo en memoria sobre las tablas
  *
- *  conceptos   una fila por concepto de la grilla. Fijos (Salario, Luz…) y eventuales
- *              (Heladera, Cena…): los eventuales son filas sueltas dentro de su categoría.
+ *  categorias  un solo nivel (Ingresos, Vivienda, Servicios…), cada una con su color,
+ *              clase (I ingreso · G gasto · A ahorro) y tipo (fijo · eventual)
+ *  conceptos   una fila de la grilla dentro de su categoría. Fijos (Salario, Luz…) se proyectan;
+ *              eventuales (Heladera, Cena…) son una fila por gasto.
  *  valores     una fila por concepto × mes: monto, cuenta ("10615+178223") y estado
  *              (confirmado = lo cargaste vos · estimado = lo completó el sistema)
- *  categorias  categorías de cada sección, con su color y orden
  */
 
-function normConcepto_(c) {
-  var sec = seccionPorNombre_(c.seccion);
-  var tipo = sec ? sec.tipo : (c.tipo === 'eventual' ? 'eventual' : 'fijo');
+function normCategoria_(c) {
+  var base = categoriaBase_(c.nombre);
+  var clase = String(c.clase || (base ? base.clase : 'G'));
   return {
-    id: String(c.id), nombre: String(c.nombre || ''), seccion: sec ? sec.nombre : String(c.seccion || 'Gastos fijos'),
-    clase: sec ? sec.clase : (String(c.clase || 'G')), categoria: String(c.categoria || (sec ? sec.nombre : c.seccion) || ''),
+    nombre: String(c.nombre || '').trim(),
+    clase: /^[IGA]$/.test(clase) ? clase : 'G',
+    tipo: String(c.tipo || (base ? base.tipo : 'fijo')) === 'eventual' ? 'eventual' : 'fijo',
+    color: String(c.color || (base ? base.color : '')),
+    orden: Number(c.orden) || 0
+  };
+}
+
+/** La categoría (de la lista) con ese nombre, sin importar mayúsculas ni acentos. */
+function buscarCategoria_(categorias, nombre) {
+  var n = norm_(nombre);
+  for (var i = 0; i < categorias.length; i++) if (norm_(categorias[i].nombre) === n) return categorias[i];
+  return null;
+}
+
+function categoriaBase_(nombre) { return buscarCategoria_(FZ.CATEGORIAS, nombre); }
+
+/** Las categorías de siempre, en su orden y con sus colores. */
+function categoriasBase_() {
+  return FZ.CATEGORIAS.map(function (c, i) { return normCategoria_({ nombre: c.nombre, orden: (i + 1) * 10 }); });
+}
+
+/** Normaliza un concepto; la clase y el tipo salen de su categoría. */
+function normConcepto_(c, categorias) {
+  var cat = buscarCategoria_(categorias || [], c.categoria);
+  var tipo = cat ? cat.tipo : (c.tipo === 'eventual' ? 'eventual' : 'fijo');
+  return {
+    id: String(c.id), nombre: String(c.nombre || ''), categoria: cat ? cat.nombre : String(c.categoria || ''),
+    clase: cat ? cat.clase : (/^[IGA]$/.test(String(c.clase)) ? String(c.clase) : 'G'),
     tipo: tipo, vence: tipo === 'fijo' ? String(c.vence == null ? '' : c.vence) : '', medio: String(c.medio || ''),
     proyeccion: tipo === 'eventual' ? 'No proyectar' : (FZ.PROY.indexOf(String(c.proyeccion)) >= 0 ? String(c.proyeccion) : 'Repetir'),
     orden: Number(c.orden) || 0
   };
 }
 
-function seccionPorNombre_(nombre) {
-  var n = norm_(nombre);
-  for (var i = 0; i < FZ.SECCIONES.length; i++) if (norm_(FZ.SECCIONES[i].nombre) === n) return FZ.SECCIONES[i];
-  return null;
-}
-
-function normCategoria_(c) {
-  var sec = seccionPorNombre_(c.seccion);
-  return { seccion: sec ? sec.nombre : String(c.seccion), nombre: String(c.nombre || '').trim(), color: String(c.color || ''), orden: Number(c.orden) || 0 };
-}
-
 function cargarModelo_() {
+  var categorias = leerTabla(FZ.T.CAT).map(normCategoria_).filter(function (c) { return c.nombre; });
   return {
-    conceptos: leerTabla(FZ.T.CONCEPTOS).map(normConcepto_),
-    valores: indexarValores_(leerTabla(FZ.T.VALORES)),
-    categorias: leerTabla(FZ.T.CAT).map(normCategoria_)
+    categorias: categorias,
+    conceptos: leerTabla(FZ.T.CONCEPTOS).map(function (c) { return normConcepto_(c, categorias); }),
+    valores: indexarValores_(leerTabla(FZ.T.VALORES))
   };
 }
 
@@ -126,18 +144,13 @@ function guardarValores_(modelo) {
   escribirTabla(FZ.T.VALORES, aplanarValores_(modelo.valores, modelo.conceptos));
 }
 
-/** Orden global: sección (orden fijo) → categoría (orden de la tabla) → concepto. Deja órdenes 10, 20, 30… */
+/** Orden global: categoría (orden de la tabla) → concepto. Deja órdenes 10, 20, 30… */
 function renumerar_(m) {
-  var secIdx = {};
-  FZ.SECCIONES.forEach(function (s, i) { secIdx[s.nombre] = i; });
-  var si = function (n) { return secIdx.hasOwnProperty(n) ? secIdx[n] : 99; };
+  m.categorias.sort(function (a, b) { return a.orden - b.orden; });
   var catIdx = {};
-  m.categorias.sort(function (a, b) { return si(a.seccion) - si(b.seccion) || a.orden - b.orden; });
-  m.categorias.forEach(function (c, i) { c.orden = (i + 1) * 10; catIdx[c.seccion + '/' + c.nombre] = i; });
-  var ci = function (c) { var k = c.seccion + '/' + c.categoria; return catIdx.hasOwnProperty(k) ? catIdx[k] : -1; };
-  m.conceptos.sort(function (a, b) {
-    return si(a.seccion) - si(b.seccion) || ci(a) - ci(b) || a.orden - b.orden;
-  });
+  m.categorias.forEach(function (c, i) { c.orden = (i + 1) * 10; catIdx[c.nombre] = i; });
+  var ci = function (c) { return catIdx.hasOwnProperty(c.categoria) ? catIdx[c.categoria] : 1e6; };
+  m.conceptos.sort(function (a, b) { return ci(a) - ci(b) || a.orden - b.orden; });
   m.conceptos.forEach(function (c, i) { c.orden = (i + 1) * 10; });
 }
 
@@ -147,16 +160,49 @@ function guardarConceptos_(m) {
   escribirTabla(FZ.T.CAT, m.categorias);
 }
 
-/** Crea la categoría si no existe (con el próximo color libre). */
-function asegurarCategoria_(m, seccion, nombre) {
-  if (!nombre || nombre === seccion) return null;
-  var ya = m.categorias.filter(function (c) { return c.seccion === seccion && norm_(c.nombre) === norm_(nombre); })[0];
+/**
+ * Devuelve la categoría con ese nombre; si no existe la crea (al final, con el próximo color libre).
+ * @param {{clase:string, tipo:string}} def clase y tipo si hay que crearla (por defecto, gasto fijo)
+ */
+function asegurarCategoria_(m, nombre, def) {
+  nombre = String(nombre || '').trim();
+  if (!nombre) return null;
+  var ya = buscarCategoria_(m.categorias, nombre);
   if (ya) return ya;
+  def = def || {};
+  var base = categoriaBase_(nombre);
   var usados = m.categorias.map(function (c) { return c.color; });
-  var color = COLORES_CAT.filter(function (x) { return usados.indexOf(x) < 0; })[0] || COLORES_CAT[m.categorias.length % COLORES_CAT.length];
-  var cat = { seccion: seccion, nombre: nombre, color: color, orden: 1e6 };
+  var color = base ? base.color : COLORES_CAT.filter(function (x) { return usados.indexOf(x) < 0; })[0] || COLORES_CAT[m.categorias.length % COLORES_CAT.length];
+  var cat = normCategoria_({ nombre: base ? base.nombre : nombre, clase: base ? base.clase : def.clase, tipo: base ? base.tipo : def.tipo, color: color, orden: 1e6 + m.categorias.length });
   m.categorias.push(cat);
   return cat;
+}
+
+/** La categoría donde van los gastos eventuales (la crea si no existe). */
+function categoriaEventual_(m) {
+  return m.categorias.filter(function (c) { return c.tipo === 'eventual'; })[0] ||
+    asegurarCategoria_(m, FZ.CATEGORIAS.filter(function (c) { return c.tipo === 'eventual'; })[0].nombre);
+}
+
+/**
+ * Ingresos siempre tiene Salario, Aguinaldo, Bonos y Otros (en ese orden, arriba de todo).
+ * Reconoce los nombres parecidos ("Sueldo", "Otros ingresos", "SAC") y los renombra.
+ */
+function completarIngresos_(m) {
+  var base = FZ.CATEGORIAS.filter(function (c) { return c.clase === 'I'; })[0];
+  var cat = buscarCategoria_(m.categorias, base.nombre) || asegurarCategoria_(m, base.nombre);
+  var parecidos = { Salario: /^(salario|sueldo)s?( neto)?$/, Aguinaldo: /^(aguinaldo|sac)$/, Bonos: /^(bono|bonos|bonificacion(es)?)$/, Otros: /^otros?( ingresos?)?$/ };
+  var deIng = m.conceptos.filter(function (c) { return c.categoria === cat.nombre; });
+  FZ.INGRESOS.forEach(function (nombre, i) {
+    var c = deIng.filter(function (x) { return norm_(x.nombre) === norm_(nombre); })[0] ||
+      deIng.filter(function (x) { return parecidos[nombre] && parecidos[nombre].test(norm_(x.nombre)) && FZ.INGRESOS.indexOf(x.nombre) < 0; })[0];
+    if (c) c.nombre = nombre;
+    else {
+      c = normConcepto_({ id: nuevoId_(), nombre: nombre, categoria: cat.nombre, proyeccion: nombre === 'Salario' ? 'Repetir' : 'No proyectar' }, m.categorias);
+      m.conceptos.push(c);
+    }
+    c.orden = -1000 + i;
+  });
 }
 
 /** Mes en que impacta un gasto (tarjeta → mes siguiente, si está configurado). */

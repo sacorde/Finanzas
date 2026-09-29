@@ -3,8 +3,8 @@
 var $ = function (id) { return document.getElementById(id); };
 var S = {
   conceptos: [], categorias: [], V: {}, meses: [], hoy: '', mesHoy: '', mesFoco: '', cfg: {}, config: {}, cfgDef: [],
-  venc: {}, indices: [], feriados: [], secciones: [], proyecciones: [], colores: [], palabras: {}, aprendidas: {}, inflEsperada: 3,
-  vista: 'planilla', colapsadas: {}, aniosCerrados: null, detalles: true, verTodo: false, nuevos: {}, temporales: [],
+  venc: {}, indices: [], feriados: [], proyecciones: [], colores: [], inflEsperada: 3,
+  vista: 'planilla', colapsadas: {}, aniosCerrados: null, verTodo: false, nuevos: {}, temporales: [],
   deshacer: [], rehacer: [], cola: [], enviando: false, pend: {}
 };
 var ETIQUETAS_CFG = {
@@ -51,8 +51,7 @@ function cargarDatos() {
 function prepararDatos(d) {
   S.conceptos = d.conceptos; S.categorias = d.categorias; S.V = indexarValoresP(d.valores);
   S.hoy = d.hoy; S.mesHoy = d.hoy.slice(0, 7); S.cfg = d.cfg; S.config = d.config; S.cfgDef = d.cfgDef; S.venc = d.venc;
-  S.indices = d.indices; S.feriados = d.feriados; S.secciones = d.secciones; S.proyecciones = d.proyecciones; S.colores = d.colores;
-  S.palabras = d.palabras; S.aprendidas = d.aprendidas; S.inflEsperada = d.inflEsperada;
+  S.indices = d.indices; S.feriados = d.feriados; S.proyecciones = d.proyecciones; S.colores = d.colores; S.inflEsperada = d.inflEsperada;
   if (!S.mesFoco) S.mesFoco = S.mesHoy;
   recalcular();
   if (!S.aniosCerrados) {
@@ -61,7 +60,6 @@ function prepararDatos(d) {
   }
   $('dlMedios').innerHTML = (S.cfg.medios || []).map(function (m) { return '<option value="' + esc(m) + '">'; }).join('');
   sincronizarSelectorMes();
-  $('bDetalles').setAttribute('aria-pressed', String(S.detalles));
   $('linkDb').href = d.urlPlanilla;
   $('navApp').hidden = false;
   $('cargando').hidden = true;
@@ -94,11 +92,11 @@ function cargarPreferencias() {
   try {
     var p = JSON.parse(localStorage.getItem('fz-prefs') || '{}');
     S.colapsadas = p.colapsadas || {}; if (p.anios) S.aniosCerrados = p.anios; if (p.vista && p.vista !== 'movimientos') S.vista = p.vista;
-    if (p.detalles === false) S.detalles = false; S.verTodo = !!p.verTodo;
+    S.verTodo = !!p.verTodo;
   } catch (e) { /* sin almacenamiento */ }
 }
 function guardarPreferencias() {
-  try { localStorage.setItem('fz-prefs', JSON.stringify({ colapsadas: S.colapsadas, anios: S.aniosCerrados, vista: S.vista, detalles: S.detalles, verTodo: S.verTodo })); } catch (e) { /* ok */ }
+  try { localStorage.setItem('fz-prefs', JSON.stringify({ colapsadas: S.colapsadas, anios: S.aniosCerrados, vista: S.vista, verTodo: S.verTodo })); } catch (e) { /* ok */ }
 }
 
 /* ---------- Vistas ---------- */
@@ -189,7 +187,7 @@ function procesarCola() {
 /* ---------- Carga rápida ---------- */
 var R = null, candidatoElegido = 0, forzarMov = false;
 function ctxRapida() {
-  return { hoy: S.hoy, items: S.conceptos.filter(function (c) { return c.tipo === 'fijo'; }), medios: S.cfg.medios || [], meses: S.meses, aprendidas: S.aprendidas, palabras: S.palabras };
+  return { hoy: S.hoy, items: S.conceptos.filter(function (c) { return c.tipo === 'fijo'; }), medios: S.cfg.medios || [], meses: S.meses };
 }
 
 function actualizarPrevia() {
@@ -197,21 +195,20 @@ function actualizarPrevia() {
   if (!txt.trim()) { box.hidden = true; R = null; return; }
   R = interpretar(txt, ctxRapida());
   if (forzarMov) { R.tipo = 'mov'; R.candidatos = []; }
-  var cats = categoriasEventuales();
-  if (cats.indexOf(R.categoria) < 0) R.categoria = cats.indexOf('Otros') >= 0 ? 'Otros' : cats[0];
   var h = [];
+  var chip = function (nombre) { return '<span class="chip" style="--cat:' + catColor(buscarCat(nombre)) + '">' + esc(nombre) + '</span>'; };
   if (R.tipo === 'fijo') {
     var c = R.candidatos[Math.min(candidatoElegido, R.candidatos.length - 1)];
     var mes = R.mes || S.mesFoco, v = S.V[c.id] && S.V[c.id][mes];
-    h.push('<div class="fila"><span class="chip fijo">' + esc(c.categoria) + '</span><b>' + esc(c.nombre) + '</b><span>· ' + esc(etiquetaMesP(mes)) + '</span></div>');
+    h.push('<div class="fila">' + chip(c.categoria) + '<b>' + esc(c.nombre) + '</b><span>· ' + esc(etiquetaMesP(mes)) + '</span></div>');
     h.push('<div class="monto num">' + (R.monto ? pesos(R.monto.valor) : '<span style="color:var(--muted)">Falta el monto</span>') + '</div>');
     h.push('<div class="nota">' + (v ? (v.e ? 'Reemplaza el estimado de ' + pesos(v.m) + ' y actualiza los meses siguientes.' : 'Reemplaza ' + pesos(v.m) + ' (ya cargado).') : 'Se carga y se arrastra a los meses siguientes.') + '</div>');
     if (R.candidatos.length > 1) h.push('<div class="nota">¿Otro? ' + R.candidatos.slice(0, 5).map(function (x, i) { return '<button class="mini" data-cand="' + i + '">' + esc(x.nombre) + '</button>'; }).join(' ') + ' <button class="mini" data-cand="mov">es un gasto eventual</button></div>');
   } else {
-    var mesI = mesRapidaEventual();
-    h.push('<div class="fila"><span class="chip mov">' + esc(R.categoria) + '</span><b>' + esc(R.desc || 'Gasto eventual') + '</b>' + (R.medio ? '<span>· ' + esc(R.medio) + '</span>' : '') + '</div>');
+    var mesI = mesRapidaEventual(), catEv = categoriaEventual();
+    h.push('<div class="fila">' + chip(catEv) + '<b>' + esc(R.desc || 'Gasto eventual') + '</b>' + (R.medio ? '<span>· ' + esc(R.medio) + '</span>' : '') + '</div>');
     h.push('<div class="monto num">' + (R.monto ? pesos(R.monto.valor) + (R.cuotas > 1 ? ' <span style="font-size:13px;color:var(--muted)">' + R.cuotas + ' × ' + pesos(R.monto.valor / R.cuotas) + '</span>' : '') : '<span style="color:var(--muted)">Falta el monto</span>') + '</div>');
-    h.push('<div class="nota">Nueva fila en Eventuales · ' + esc(etiquetaMesP(mesI)) + (R.cuotas > 1 ? ' y ' + (R.cuotas - 1) + ' meses más' : '') + '. Categoría: <select id="rapCat">' + cats.map(function (c) { return '<option' + (c === R.categoria ? ' selected' : '') + '>' + esc(c) + '</option>'; }).join('') + '</select></div>');
+    h.push('<div class="nota">Nueva fila en ' + esc(catEv) + ' · ' + esc(etiquetaMesP(mesI)) + (R.cuotas > 1 ? ' y ' + (R.cuotas - 1) + ' meses más' : '') + '</div>');
   }
   h.push('<div class="nota"><kbd>Enter</kbd> guardar · <kbd>Esc</kbd> cancelar</div>');
   box.innerHTML = h.join('');
@@ -219,12 +216,11 @@ function actualizarPrevia() {
   box.querySelectorAll('[data-cand]').forEach(function (b) {
     b.onmousedown = function (e) { e.preventDefault(); if (b.dataset.cand === 'mov') forzarMov = true; else candidatoElegido = Number(b.dataset.cand); actualizarPrevia(); };
   });
-  var sel = $('rapCat'); if (sel) sel.onchange = function () { R.categoria = sel.value; R.catManual = sel.value; };
 }
 
-function categoriasEventuales() {
-  var sec = S.secciones.filter(function (x) { return x.tipo === 'eventual'; })[0];
-  return S.categorias.filter(function (c) { return c.seccion === sec.nombre; }).sort(function (a, b) { return a.orden - b.orden; }).map(function (c) { return c.nombre; });
+function categoriaEventual() {
+  var c = S.categorias.filter(function (x) { return x.tipo === 'eventual'; })[0];
+  return c ? c.nombre : 'Eventuales';
 }
 
 /** Mes de un gasto eventual cargado rápido: el mes escrito, o el elegido; con tarjeta, el siguiente al de la fecha. */
@@ -241,15 +237,14 @@ function guardarRapida() {
     var mes = R.mes || S.mesFoco;
     if (aplicarCambios([{ c: c.id, mes: mes, texto: R.montoTexto }])) aviso('✓ ' + c.nombre + ' · ' + etiquetaMesP(mes) + ': ' + pesos(R.monto.valor), false, deshacer);
   } else {
-    var sel = $('rapCat');
-    var p = { nombre: R.desc ? R.desc.charAt(0).toUpperCase() + R.desc.slice(1) : 'Gasto', texto: R.montoTexto, categoria: sel ? sel.value : R.categoria,
+    var p = { nombre: R.desc ? R.desc.charAt(0).toUpperCase() + R.desc.slice(1) : 'Gasto', texto: R.montoTexto,
       cuotas: R.cuotas, medio: R.medio, mes: mesRapidaEventual() };
     estadoGuardado('guardando');
     api('api_crearEventual', p).then(function (r) {
       S.nuevos[r.id] = true;
       aplicarEstructura(r);
       estadoGuardado('ok');
-      aviso('✓ ' + p.nombre + ' · ' + p.categoria + ' · ' + pesos(R0.monto.valor) + (p.cuotas > 1 ? ' en ' + p.cuotas + ' cuotas' : ''), false, function () { operar('api_borrarConcepto', [r.id], 'Deshecho'); });
+      aviso('✓ ' + p.nombre + ' · ' + etiquetaMesP(p.mes) + ' · ' + pesos(R0.monto.valor) + (p.cuotas > 1 ? ' en ' + p.cuotas + ' cuotas' : ''), false, function () { operar('api_borrarConcepto', [r.id], 'Deshecho'); });
     }).catch(function (e) { estadoGuardado('error'); aviso(e.message, true); });
     var R0 = R;
   }
@@ -296,10 +291,9 @@ function guardarCampo(c, campos) {
 
 function quitarTemporales() { S.temporales = []; }
 
-function nuevaFila(sec, categoria) {
-  S.temporales = [{ t: 'nuevo', seccion: sec.nombre, categoria: categoria }];
-  if (S.colapsadas['s:' + sec.nombre]) S.colapsadas['s:' + sec.nombre] = false;
-  if (S.colapsadas['c:' + sec.nombre + '/' + categoria]) S.colapsadas['c:' + sec.nombre + '/' + categoria] = false;
+function nuevaFila(categoria) {
+  S.temporales = [{ t: 'nuevo', categoria: categoria }];
+  if (S.colapsadas[categoria]) S.colapsadas[categoria] = false;
   dibujarGrilla();
   var r = G.filas.map(function (f) { return f.t; }).indexOf('nuevo');
   G.sel = { r: r, k: 0, r2: r, k2: 0 };
@@ -307,9 +301,8 @@ function nuevaFila(sec, categoria) {
   editar('');
 }
 
-function nuevaCategoria(sec) {
-  S.temporales = [{ t: 'nuevacat', seccion: sec.nombre }];
-  S.colapsadas['s:' + sec.nombre] = false;
+function nuevaCategoria() {
+  S.temporales = [{ t: 'nuevacat' }];
   dibujarGrilla();
   var r = G.filas.map(function (f) { return f.t; }).indexOf('nuevacat');
   G.sel = { r: r, k: 0, r2: r, k2: 0 };
@@ -318,7 +311,7 @@ function nuevaCategoria(sec) {
 }
 
 function crearConcepto(f, nombre) {
-  operar('api_guardarConcepto', [{ nombre: nombre, seccion: f.sec.nombre, categoria: f.categoria }]).then(function (r) {
+  operar('api_guardarConcepto', [{ nombre: nombre, categoria: f.categoria }]).then(function (r) {
     if (!r) return;
     S.nuevos[r.id] = true;
     dibujarGrilla();
@@ -340,11 +333,11 @@ function eliminarFila(c) {
 function eliminarCategoria(f) {
   if (f.conceptos.length) { aviso('"' + f.cat.nombre + '" tiene ' + f.conceptos.length + ' fila(s): borralas o movelas primero (clic derecho → Mover a categoría).', true); return; }
   if (!confirm('¿Eliminar la categoría "' + f.cat.nombre + '"?')) return;
-  operar('api_borrarCategoria', [f.sec.nombre, f.cat.nombre], 'Categoría eliminada');
+  operar('api_borrarCategoria', [f.cat.nombre], 'Categoría eliminada');
 }
 
 function moverFila(c, dir) {
-  var grupo = S.conceptos.filter(function (x) { return x.seccion === c.seccion && x.categoria === c.categoria; }).sort(function (a, b) { return a.orden - b.orden; });
+  var grupo = S.conceptos.filter(function (x) { return x.categoria === c.categoria; }).sort(function (a, b) { return a.orden - b.orden; });
   var i = grupo.indexOf(c), j = i + dir;
   if (j < 0 || j >= grupo.length) return;
   var o = grupo[j].orden; grupo[j].orden = c.orden; c.orden = o;
@@ -354,12 +347,12 @@ function moverFila(c, dir) {
 }
 
 function moverCategoria(f, dir) {
-  var grupo = S.categorias.filter(function (x) { return x.seccion === f.sec.nombre; }).sort(function (a, b) { return a.orden - b.orden; });
+  var grupo = S.categorias.slice().sort(function (a, b) { return a.orden - b.orden; });
   var i = grupo.indexOf(f.cat), j = i + dir;
   if (i < 0 || j < 0 || j >= grupo.length) return;
   var o = grupo[j].orden; grupo[j].orden = f.cat.orden; f.cat.orden = o;
   dibujarGrilla();
-  operar('api_moverCategoria', [f.sec.nombre, f.cat.nombre, dir]);
+  operar('api_moverCategoria', [f.cat.nombre, dir]);
 }
 
 /* ---------- Menú contextual y avisos ---------- */
@@ -393,7 +386,7 @@ function aviso(texto, error, accion) {
 
 /* ---------- Ajustes ---------- */
 function dibujarConfig() {
-  var h = '<div class="card"><h2>Preferencias</h2><p class="sub">Todo lo demás se configura en cada concepto (clic en su nombre en la planilla).</p>';
+  var h = '<div class="card"><h2>Preferencias</h2><p class="sub">Vencimiento, medio de pago y meses futuros se configuran en cada concepto de la planilla (clic en el resumen gris junto a su nombre).</p>';
   S.cfgDef.forEach(function (d) {
     var v = S.config[d.k], id = 'cfg_' + d.k;
     var campo;
@@ -524,7 +517,10 @@ function mostrarInstalacion(estado) {
 /* ---------- Arranque ---------- */
 document.querySelectorAll('#navApp button').forEach(function (b) { b.onclick = function () { mostrarVista(b.dataset.v); }; });
 document.addEventListener('keydown', function (e) { if (e.key === 'Escape') $('menu').hidden = true; });
-document.addEventListener('mousedown', function (e) { if (!e.target.closest('#menu')) $('menu').hidden = true; });
+document.addEventListener('mousedown', function (e) {
+  if (!e.target.closest('#menu')) $('menu').hidden = true;
+  if (!e.target.closest('#ficha') && !e.target.closest('[data-meta]')) cerrarFicha();
+});
 $('rapida').addEventListener('input', function () { candidatoElegido = 0; forzarMov = false; actualizarPrevia(); });
 $('rapida').addEventListener('keydown', function (e) {
   if (e.key === 'Enter') { e.preventDefault(); guardarRapida(); }
@@ -536,7 +532,6 @@ $('mesFoco').onchange = function () { elegirMes($('mesFoco').value); };
 $('bMesAnt').onclick = function () { elegirMes(sumarMesP(S.mesFoco, -1)); };
 $('bMesSig').onclick = function () { elegirMes(sumarMesP(S.mesFoco, 1)); };
 $('bHoy').onclick = function () { elegirMes(S.mesHoy); };
-$('bDetalles').onclick = function () { S.detalles = !S.detalles; $('bDetalles').setAttribute('aria-pressed', String(S.detalles)); guardarPreferencias(); dibujarGrilla(); };
 iniciarGrilla();
 iniciar();
 </script>

@@ -144,9 +144,6 @@
     <div class="card">
       <header>
         <div><h2>Gastos por categoría</h2><div class="sub" id="subCat"></div></div>
-        <div class="grupo"><span>Agrupar</span>
-          <div class="seg" id="agrupar"><button data-a="categoria" aria-pressed="true">Categoría</button><button data-a="seccion" aria-pressed="false">Sección</button></div>
-        </div>
       </header>
       <div class="chips" id="chipsCat" style="margin:4px 0 10px"></div>
       <div class="lienzo"><canvas id="cCat" aria-label="Gastos por categoría y mes" role="img"></canvas></div>
@@ -213,7 +210,7 @@
 /* Finanzas · Dashboard (usa las funciones de cálculo de Nucleo) */
 var Tablero = (function () {
 var D = null, charts = {};
-var estado = { vista: 'resumen', desde: null, hasta: null, moneda: 'nominal', estimados: true, agrupar: 'categoria', catsOff: {}, catSel: null, ingresos: null, precios: null, ordPre: { k: 'real', dir: -1 } };
+var estado = { vista: 'resumen', desde: null, hasta: null, moneda: 'nominal', estimados: true, catsOff: {}, catSel: null, ingresos: null, precios: null, ordPre: { k: 'real', dir: -1 } };
 var $ = function (id) { return document.getElementById(id); };
 var css = function (v) { return getComputedStyle(document.documentElement).getPropertyValue(v).trim(); };
 var SERIES = ['--s1', '--s2', '--s3', '--s4', '--s5', '--s6', '--s7', '--s8'];
@@ -268,7 +265,6 @@ function sincronizarControles() {
   $('tbDesde').value = estado.desde; $('tbHasta').value = estado.hasta;
   document.querySelectorAll('#tbTabs button').forEach(function (b) { b.setAttribute('aria-selected', String(b.dataset.v === estado.vista)); });
   document.querySelectorAll('#moneda button').forEach(function (b) { b.setAttribute('aria-pressed', String(b.dataset.m === estado.moneda)); });
-  document.querySelectorAll('#agrupar button').forEach(function (b) { b.setAttribute('aria-pressed', String(b.dataset.a === estado.agrupar)); });
   ['resumen', 'gastos', 'salario', 'precios'].forEach(function (v) { $('tb-' + v).hidden = v !== estado.vista; });
   $('tbEst').checked = estado.estimados;
 }
@@ -410,33 +406,16 @@ function badgeTasa(t) {
 }
 
 /* ---------- Vista: Gastos ---------- */
-var PALETA_CAT = null;
-function coloresCategoria() {
-  if (PALETA_CAT && PALETA_CAT._D === D) return PALETA_CAT;
-  // Orden estable: por gasto total histórico (no por el filtro) → el color sigue a la categoría.
-  var tot = {};
-  D.items.filter(function (i) { return i.clase === 'G'; }).forEach(function (i) {
-    tot[i.categoria] = (tot[i.categoria] || 0) + i.v.reduce(function (a, v) { return a + (v || 0); }, 0);
-  });
-  var orden = Object.keys(tot).sort(function (a, b) { return tot[b] - tot[a]; });
-  PALETA_CAT = { _D: D };
-  orden.forEach(function (c, k) { PALETA_CAT[c] = k < 7 ? SERIES[k] : '--otros'; });
-  return PALETA_CAT;
-}
-
+/** Gastos agrupados por categoría, con el color de cada categoría (el mismo que en la planilla). */
 function grupos() {
   var gastos = D.items.filter(function (i) { return i.clase === 'G'; });
-  var mapa = {}, orden = [];
-  var pal = coloresCategoria();
+  var mapa = {}, orden = [], colores = {};
   gastos.forEach(function (it) {
-    var k = estado.agrupar === 'seccion' ? it.seccion : (pal[it.categoria] === '--otros' ? 'Otras categorías' : it.categoria);
+    var k = it.categoria;
     if (!mapa[k]) { mapa[k] = []; orden.push(k); }
     mapa[k].push(it);
   });
-  var colores = {};
-  orden.forEach(function (k, n) {
-    colores[k] = estado.agrupar === 'seccion' ? css(SERIES[n % 8]) : css(k === 'Otras categorías' ? '--otros' : pal[k]);
-  });
+  orden.forEach(function (k, n) { colores[k] = (D.colores && D.colores[k]) || css(SERIES[n % 8]); });
   return { mapa: mapa, orden: orden, colores: colores };
 }
 
@@ -688,9 +667,6 @@ $('tbDesde').onchange = function () { estado.desde = Number(this.value); documen
 $('tbHasta').onchange = function () { estado.hasta = Number(this.value); document.querySelectorAll('#presets button').forEach(function (x) { x.setAttribute('aria-pressed', 'false'); }); render(); };
 document.querySelectorAll('#moneda button').forEach(function (b) {
   b.onclick = function () { estado.moneda = b.dataset.m; sincronizarControles(); render(); };
-});
-document.querySelectorAll('#agrupar button').forEach(function (b) {
-  b.onclick = function () { estado.agrupar = b.dataset.a; estado.catsOff = {}; estado.catSel = null; sincronizarControles(); render(); };
 });
 $('tbEst').onchange = function () { estado.estimados = this.checked; render(); };
 window.addEventListener('scroll', function () { $('tt').hidden = true; }, { passive: true });

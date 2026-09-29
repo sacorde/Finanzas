@@ -99,6 +99,7 @@ function resumenCalendario_(r) {
 
 /** Hojas que no son tablas de la base de datos. */
 function api_hojasSobrantes() {
+  actualizarEsquema_();
   var ss = ss_();
   return ss.getSheets().filter(function (sh) { return !ESQUEMA[sh.getName()] || !esTabla_(sh); }).map(function (sh) {
     return { nombre: sh.getName(), filas: sh.getLastRow(), columnas: sh.getLastColumn() };
@@ -124,37 +125,44 @@ function api_borrarHojas(nombres) {
 }
 
 /* ------------------------------------------------------------------ */
-/* Actualización automática de la base (versión 3 → 4)                */
+/* Actualización automática de la base (versiones 3 y 4 → 5)          */
 /* ------------------------------------------------------------------ */
 
 /**
- * La versión 3 tenía una tabla Movimientos y una fila por categoría de Eventuales.
- * La 4 guarda cada gasto eventual como una fila de la grilla y las categorías (con color) en su tabla.
- * Corre sola la primera vez que se abre la app.
+ * Las versiones 3 y 4 agrupaban en secciones (Gastos fijos, Préstamos y deudas…) con subcategorías,
+ * y la 3 además tenía una tabla Movimientos. La 5 tiene un solo nivel de categorías con color.
+ * Corre sola (con lock) la primera vez que se abre la app o corre la tarea diaria.
+ * @return {boolean} true si actualizó algo
  */
 function actualizarEsquema_() {
-  if (!dbInstalada_() || hojaTabla_(FZ.T.CAT)) return false;
+  if (!dbInstalada_() || cabecera_(hojaTabla_(FZ.T.CONCEPTOS)).indexOf('seccion') < 0) return false;
   return conLock_(function () {
-    if (hojaTabla_(FZ.T.CAT)) return false;
+    if (cabecera_(hojaTabla_(FZ.T.CONCEPTOS)).indexOf('seccion') < 0) return false;
     var ss = ss_();
-    var conceptos = leerTabla(FZ.T.CONCEPTOS).map(normConcepto_);
-    var m = { conceptos: conceptos.filter(function (c) { return c.tipo === 'fijo'; }), valores: indexarValores_(leerTabla(FZ.T.VALORES)), categorias: [] };
-    m.conceptos.forEach(function (c) { asegurarCategoria_(m, c.seccion, c.categoria); });
-    var secEv = FZ.SECCIONES.filter(function (s) { return s.tipo === 'eventual'; })[0].nombre;
-    conceptos.filter(function (c) { return c.tipo === 'eventual'; }).forEach(function (c) { asegurarCategoria_(m, secEv, c.nombre); });
+    var v4 = !!hojaTabla_(FZ.T.CAT);
+    var m = { conceptos: [], valores: indexarValores_(leerTabla(FZ.T.VALORES)), categorias: categoriasBase_() };
+    leerTabla(FZ.T.CONCEPTOS).forEach(function (c) {
+      var tipo = c.tipo === 'eventual' ? 'eventual' : 'fijo';
+      // En la versión 3, las filas de Eventuales eran categorías (los gastos estaban en Movimientos)
+      if (tipo === 'eventual' && !v4) return;
+      var clase = /^[IGA]$/.test(String(c.clase)) ? String(c.clase) : 'G';
+      var cat = asegurarCategoria_(m, mapearCategoria_({ seccion: c.seccion, categoria: c.categoria, nombre: c.nombre, clase: clase, tipo: tipo }), { clase: clase });
+      m.conceptos.push(normConcepto_({ id: c.id, nombre: c.nombre, categoria: cat.nombre, vence: c.vence, medio: c.medio, proyeccion: c.proyeccion, orden: c.orden }, m.categorias));
+    });
     var sh = ss.getSheetByName('Movimientos');
-    if (sh && sh.getLastRow() > 1 && sh.getRange(1, 1, 1, ESQUEMA_MOV_V3.length).getValues()[0].join('|') === ESQUEMA_MOV_V3.join('|')) {
+    if (!v4 && sh && sh.getLastRow() > 1 && cabecera_(sh).slice(0, ESQUEMA_MOV_V3.length).join('|') === ESQUEMA_MOV_V3.join('|')) {
       sh.getRange(2, 1, sh.getLastRow() - 1, ESQUEMA_MOV_V3.length).getValues().forEach(function (r) {
         var mv = {};
         ESQUEMA_MOV_V3.forEach(function (k, i) { mv[k] = r[i] instanceof Date ? (k === 'mes' ? isoMes_(r[i]) : isoDia_(r[i])) : r[i]; });
         if (!mv.descripcion || !Number(mv.monto)) return;
-        agregarEventual_(m, { nombre: mv.descripcion, categoria: String(mv.categoria || 'Otros'), medio: mv.medio, mes: String(mv.mes).slice(0, 7),
-          monto: Number(mv.monto), cuenta: String(mv.cuenta || ''), cuotas: mv.cuotas });
+        agregarEventual_(m, { nombre: mv.descripcion, medio: mv.medio, mes: String(mv.mes).slice(0, 7), monto: Number(mv.monto), cuenta: String(mv.cuenta || ''), cuotas: mv.cuotas });
       });
       sh.setName('Movimientos (versión anterior)');
     }
-    crearTabla_(ss, FZ.T.CAT);
+    completarIngresos_(m);
     guardarConceptos_(m);
+    guardarValores_(m);
+    reproyectar_(m, null);
     guardarValores_(m);
     return true;
   });

@@ -5,7 +5,8 @@
 1. **Primer intento (otro repo):** terminó siendo más difícil de manipular que el Excel.
 2. **Versión 2:** la hoja de Google Sheets como interfaz, con scripts que agregaban automatizaciones. Funcionaba, pero la planilla mezclaba datos, formato y lógica, y quedaba atada a lo que Sheets deja hacer.
 3. **Versión 3:** una **app web** que se usa como un Excel y una planilla que es **solo base de datos**.
-4. **Versión 4 (actual):** todo se agrega y modifica en celdas (sin formularios ni pestaña de movimientos), categorías con color y selector de mes.
+4. **Versión 4:** todo se agrega y modifica en celdas (sin formularios ni pestaña de movimientos), categorías con color y selector de mes.
+5. **Versión 5 (actual):** un solo nivel de categorías (sin secciones ni subcategorías), sin columna de detalles: vencimiento y medio de pago resumidos junto al nombre.
 
 ## Principios
 
@@ -23,9 +24,11 @@
 | App web de Apps Script (HtmlService) | Sitio externo + API de Sheets | No hay servidores ni claves: corre con tu cuenta y tus permisos |
 | Tabla `Valores` larga (concepto × mes) | Grilla de meses en la hoja | Sin límites de columnas ni fórmulas frágiles, y fácil de leer desde cualquier herramienta |
 | Proyección calculada en el servidor | Fórmulas en Sheets | Reglas claras (repetir, promedio, inflación, baja con 0) y testeables |
-| Gastos eventuales como filas de la grilla (una por gasto, dentro de su categoría) | Una lista aparte de movimientos | Todo se carga y se corrige en celdas, como en el Excel; las filas de años plegados se ocultan |
+| Gastos eventuales como filas de la grilla (una por gasto, en la categoría Eventuales) | Una lista aparte de movimientos | Todo se carga y se corrige en celdas, como en el Excel; las filas de años plegados se ocultan |
 | Cuotas escritas en la celda (`600k 3c`) | Formulario de cuotas | Se reparten en celdas normales, que se pueden corregir una por una |
-| Categorías en su tabla, con color | Categoría solo como texto en cada concepto | Permite categorías vacías, colores y orden propio |
+| Un solo nivel de categorías, en su tabla, con color | Secciones con subcategorías | Más simple de leer y de mantener; permite categorías vacías, colores y orden propio |
+| Vencimiento y medio resumidos junto al nombre | Columnas de detalle | La grilla queda como el Excel: concepto + meses |
+| Tablas leídas por encabezado | Por posición de columna | Las bases de versiones anteriores se actualizan solas sin romperse |
 | Deploy a la implementación de prueba (`/dev`) | Crear una versión por deploy | Siempre el último código, sin acumular versiones; la app es privada (solo el dueño) |
 | Filtros y dashboard en el navegador | Recalcular en el servidor | Respuesta instantánea |
 
