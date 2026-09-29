@@ -43,7 +43,7 @@
     </div>
     <div class="grilla-wrap">
       <div class="grilla" id="grilla" tabindex="0" aria-label="Planilla de finanzas"></div>
-      <div class="pie num" id="pie"><span id="pieSel">Seleccioná celdas para ver la suma</span><span class="ayuda">Enter editar · Supr borrar · Ctrl+Z deshacer · Alt+↑↓ mover fila · clic derecho: más opciones</span></div>
+      <div class="pie num" id="pie"><span id="pieSel">Seleccioná celdas para ver la suma</span><span class="ayuda">Enter editar · F4 o ✎ editar concepto · Supr borrar · Ctrl+Z deshacer · Alt+↑↓ mover fila · clic derecho: más opciones</span></div>
     </div>
     <div class="espacio-pie"></div>
   </section>
@@ -61,6 +61,20 @@
   </section>
 </main>
 
+<aside class="panel" id="panel" hidden aria-label="Editar concepto">
+  <header class="panel-cab">
+    <i class="punto"></i>
+    <div class="panel-tit"><h2 id="pTitulo"></h2><span id="pSub"></span></div>
+    <button class="boton icono" id="pCerrar" title="Cerrar (Esc)" aria-label="Cerrar">✕</button>
+  </header>
+  <div class="panel-cuerpo" id="pCuerpo"></div>
+  <footer class="panel-pie">
+    <button class="boton peligro" id="pEliminar" title="Eliminar la fila y sus montos">🗑️</button>
+    <span class="espacio"></span>
+    <button class="boton" id="pCancelar">Cancelar</button>
+    <button class="boton primario" id="pGuardar">Guardar</button>
+  </footer>
+</aside>
 <div class="menu" id="menu" hidden></div>
 <div class="avisos" id="avisos" aria-live="polite"></div>
 <datalist id="dlMedios"></datalist>
@@ -69,5 +83,6 @@
 <?!= include('Nucleo') ?>
 <?!= include('Grilla') ?>
 <?!= include('AppJs') ?>
+<?!= include('Panel') ?>
 </body>
 </html>

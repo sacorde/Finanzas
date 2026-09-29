@@ -1,0 +1,125 @@
+<script>
+/* Finanzas · Panel lateral para editar un concepto (se abre con el lápiz ✎, F4 o clic derecho → Editar).
+ * Nombre, categoría, vencimiento (con las fechas que resultan), medio de pago, meses futuros y el monto del mes elegido. */
+var AYUDA_PROY = {
+  'Repetir': 'Los meses futuros repiten el último monto cargado.',
+  'Promedio 3 meses': 'Los meses futuros usan el promedio de los últimos 3 meses cargados.',
+  'Ajustar por inflación': 'Los meses futuros suben con la inflación esperada.',
+  'No proyectar': 'Solo cuenta lo que cargues a mano (aguinaldo, bonos, gastos variables).'
+};
+var PANEL = { c: null, timer: null, vence: null };
+
+/** Monto para mostrar en el panel: la cuenta ("=100+50") o el número con separador de miles. */
+function montoPanel(v) {
+  if (!v) return '';
+  return v.c ? '=' + v.c : Number(v.m).toLocaleString('es-AR', { maximumFractionDigits: 2 });
+}
+
+function abrirPanel(c) {
+  var p = $('panel');
+  PANEL.c = c; PANEL.vence = null;
+  var fijo = c.tipo === 'fijo';
+  var cat = buscarCat(c.categoria);
+  var cats = S.categorias.filter(function (k) { return k.tipo === c.tipo; }).sort(function (a, b) { return a.orden - b.orden; });
+  var v = celdaDe(c, S.mesFoco);
+  p.style.setProperty('--cat', catColor(cat));
+  $('pTitulo').textContent = c.nombre;
+  $('pSub').textContent = c.categoria + ' · ' + (fijo ? 'se repite todos los meses' : 'gasto eventual');
+  var h = [];
+  h.push('<label class="campo-p">Nombre<input id="pNombre" autocomplete="off" value="' + esc(c.nombre) + '"></label>');
+  h.push('<label class="campo-p">Categoría<select id="pCat">' + cats.map(function (k) { return '<option' + (k.nombre === c.categoria ? ' selected' : '') + '>' + esc(k.nombre) + '</option>'; }).join('') + '</select></label>');
+  h.push('<label class="campo-p">Monto de ' + esc(etiquetaMesP(S.mesFoco).toLowerCase()) + '<input id="pMonto" class="num" autocomplete="off" inputmode="decimal" placeholder="Vacío" value="' + esc(montoPanel(v)) + '">' +
+    '<span class="ayuda-p">' + (v ? (v.e ? 'Estimado por el sistema: si lo cambiás queda confirmado.' : 'Cargado por vos.') : 'Acepta cuentas: 1500+300, 150k, 12000*3.') + '</span></label>');
+  if (fijo) {
+    h.push('<label class="campo-p">Vence<input id="pVence" list="dlVence" autocomplete="off" placeholder="10 · 10 hábil · 1er hábil · último día" value="' + esc(c.vence) + '">' +
+      '<span class="ayuda-p" id="pVenceInfo"></span></label>');
+  }
+  h.push('<label class="campo-p">Medio de pago<input id="pMedio" list="dlMedios" autocomplete="off" placeholder="Débito automático, Tarjeta VISA…" value="' + esc(c.medio) + '">' +
+    (fijo ? '<span class="ayuda-p">Con débito automático, el monto se confirma solo el día del vencimiento.</span>' : '') + '</label>');
+  if (fijo) {
+    h.push('<label class="campo-p">Meses futuros<select id="pProy">' + S.proyecciones.map(function (x) { return '<option' + (x === c.proyeccion ? ' selected' : '') + '>' + esc(x) + '</option>'; }).join('') + '</select>' +
+      '<span class="ayuda-p" id="pProyInfo">' + esc(AYUDA_PROY[c.proyeccion] || '') + '</span></label>');
+  }
+  $('pCuerpo').innerHTML = h.join('');
+  p.hidden = false;
+  document.body.classList.add('con-panel');
+  if (fijo) {
+    mostrarFechasVence(c.vence ? { fechas: fechasGuardadas(c) } : { fechas: [] });
+    $('pVence').addEventListener('input', function () {
+      clearTimeout(PANEL.timer);
+      var txt = $('pVence').value.trim();
+      PANEL.timer = setTimeout(function () { probarVence(txt); }, 350);
+    });
+    $('pProy').onchange = function () { $('pProyInfo').textContent = AYUDA_PROY[$('pProy').value] || ''; };
+  }
+  $('pNombre').focus();
+  $('pNombre').select();
+}
+
+/** Las fechas ya calculadas para este concepto, desde el mes elegido. */
+function fechasGuardadas(c) {
+  var out = [];
+  for (var k = 0; k < 4; k++) { var f = S.venc[c.id] && S.venc[c.id][sumarMesP(S.mesFoco, k)]; if (f) out.push(f); }
+  return out;
+}
+
+function probarVence(txt) {
+  if (!PANEL.c) return;
+  if (!txt) { PANEL.vence = { fechas: [] }; mostrarFechasVence(PANEL.vence); return; }
+  $('pVenceInfo').textContent = 'Calculando…';
+  api('api_probarVence', txt, S.mesFoco).then(function (r) {
+    if (!PANEL.c || $('pVence').value.trim() !== txt) return;
+    PANEL.vence = r;
+    mostrarFechasVence(r);
+  }).catch(function (e) { $('pVenceInfo').textContent = e.message; });
+}
+
+function mostrarFechasVence(r) {
+  var el = $('pVenceInfo');
+  el.classList.toggle('error', !!r.error);
+  if (r.error) { el.textContent = r.error; return; }
+  if (!r.fechas.length) { el.textContent = 'Sin vencimiento: no aparece en el calendario.'; return; }
+  el.innerHTML = (r.descripcion ? esc(r.descripcion) + '. ' : '') + 'Se paga: ' + r.fechas.map(function (f) {
+    return '<b>' + esc(MESES_P[Number(f.slice(5, 7)) - 1].slice(0, 3)) + ' (' + Number(f.slice(8)) + ')</b>';
+  }).join(' · ');
+}
+
+function guardarPanel() {
+  var c = PANEL.c;
+  if (!c) return;
+  if (PANEL.vence && PANEL.vence.error) { aviso(PANEL.vence.error, true); $('pVence').focus(); return; }
+  var campos = {};
+  var nombre = $('pNombre').value.trim();
+  if (!nombre) { aviso('El concepto necesita un nombre', true); $('pNombre').focus(); return; }
+  if (nombre !== c.nombre) campos.nombre = nombre;
+  if ($('pCat').value !== c.categoria) campos.categoria = $('pCat').value;
+  if (c.tipo === 'fijo' && $('pVence').value.trim() !== (c.vence || '')) campos.vence = $('pVence').value.trim();
+  if ($('pMedio').value.trim() !== (c.medio || '')) campos.medio = $('pMedio').value.trim();
+  if (c.tipo === 'fijo' && $('pProy').value !== c.proyeccion) campos.proyeccion = $('pProy').value;
+  var monto = $('pMonto').value.trim(), v = celdaDe(c, S.mesFoco);
+  if (monto && !montoP(monto)) { aviso('No entendí el monto "' + monto + '"', true); $('pMonto').focus(); return; }
+  var cambiaMonto = monto !== montoPanel(v) || (v && v.e && monto);
+  cerrarPanel();
+  if (cambiaMonto) aplicarCambios([{ c: c.id, mes: S.mesFoco, texto: monto }]);
+  if (Object.keys(campos).length) guardarCampo(c, campos).then(function (r) { if (r && !campos.vence) aviso('✓ ' + (campos.nombre || c.nombre) + ' actualizado'); });
+  else if (cambiaMonto) aviso('✓ Monto de ' + etiquetaMesP(S.mesFoco) + ' guardado');
+}
+
+function cerrarPanel() {
+  clearTimeout(PANEL.timer);
+  PANEL.c = null;
+  $('panel').hidden = true;
+  document.body.classList.remove('con-panel');
+  $('grilla').focus({ preventScroll: true });
+}
+
+$('pGuardar').onclick = guardarPanel;
+$('pCancelar').onclick = cerrarPanel;
+$('pCerrar').onclick = cerrarPanel;
+$('pEliminar').onclick = function () { var c = PANEL.c; if (!c) return; cerrarPanel(); eliminarFila(c); };
+$('panel').addEventListener('keydown', function (e) {
+  if (e.key === 'Escape') { e.preventDefault(); cerrarPanel(); }
+  else if (e.key === 'Enter' && e.target.tagName !== 'BUTTON') { e.preventDefault(); guardarPanel(); }
+  e.stopPropagation();
+});
+</script>

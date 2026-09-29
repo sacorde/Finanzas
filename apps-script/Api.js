@@ -36,7 +36,7 @@ function api_datos() {
     cfg: leerConfig(),
     proyecciones: FZ.PROY,
     colores: COLORES_CAT,
-    venc: vencimientos_(m.conceptos, hoy),
+    venc: vencimientos_(m, hoy),
     inflEsperada: Math.round(inflacionEsperada_(indices) * 1000) / 10,
     urlPlanilla: ss_().getUrl()
   };
@@ -57,7 +57,7 @@ function valoresDe_(modelo, ids) {
 
 /** Respuesta estándar después de un cambio de estructura. */
 function estructura_(m, ids) {
-  return { conceptos: m.conceptos, categorias: m.categorias, venc: vencimientos_(m.conceptos, new Date()), valores: valoresDe_(m, ids || []) };
+  return { conceptos: m.conceptos, categorias: m.categorias, venc: vencimientos_(m, new Date()), valores: valoresDe_(m, ids || []) };
 }
 
 /**
@@ -122,6 +122,25 @@ function api_guardarConcepto(c) {
     r.id = nuevo.id;
     return r;
   });
+}
+
+/**
+ * Previsualiza una regla de vencimiento mientras se escribe en el panel.
+ * @return {{error:string}|{descripcion:string, fechas:Array<string>}} fechas de los próximos 4 meses (desde el mes indicado)
+ */
+function api_probarVence(texto, mesDesde) {
+  var r = parsearRegla(texto);
+  if (!r) return { descripcion: '', fechas: [] };
+  if (r.error) return { error: r.error };
+  var fer = leerFeriados();
+  var ini = /^\d{4}-\d{2}$/.test(String(mesDesde)) ? desdeIsoMes_(mesDesde) : new Date();
+  var fechas = [];
+  for (var k = 0; k < 4; k++) {
+    var d = new Date(ini.getFullYear(), ini.getMonth() + k, 1);
+    var f = fechaRegla(r, d.getFullYear(), d.getMonth(), fer);
+    if (f) fechas.push(isoDia_(f));
+  }
+  return { descripcion: describirRegla(r), fechas: fechas };
 }
 
 function api_borrarConcepto(id) {
@@ -249,7 +268,7 @@ function api_guardarFeriados(lista) {
       .sort(function (a, b) { return a.fecha < b.fecha ? -1 : 1; });
     escribirTabla(FZ.T.FER, filas);
     FERIADOS_CACHE_ = null;
-    return { feriados: filas, venc: vencimientos_(cargarModelo_().conceptos, new Date()) };
+    return { feriados: filas, venc: vencimientos_(cargarModelo_(), new Date()) };
   });
 }
 

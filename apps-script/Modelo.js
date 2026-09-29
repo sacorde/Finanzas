@@ -212,20 +212,25 @@ function mesImputacion_(fechaIso, medio, tarjetaMesSig) {
   return isoMes_(new Date(f.getFullYear(), f.getMonth() + (sig ? 1 : 0), 1));
 }
 
-/** Fechas de vencimiento del mes actual y el siguiente: {conceptoId: {mes: 'YYYY-MM-DD'}} */
-function vencimientos_(conceptos, hoy) {
+/**
+ * Fecha de vencimiento de cada concepto fijo en cada mes de la línea de tiempo
+ * (el día cambia mes a mes: último día 28/30/31, días hábiles, feriados).
+ * @return {Object} {conceptoId: {'YYYY-MM': 'YYYY-MM-DD'}}
+ */
+function vencimientos_(m, hoy) {
   var fer = leerFeriados();
+  var meses = lineaDeTiempo_(m.valores, isoDia_(hoy), leerConfig().horizonte);
   var out = {};
-  conceptos.forEach(function (c) {
+  m.conceptos.forEach(function (c) {
     if (c.tipo !== 'fijo') return;
     var r = parsearRegla(c.vence);
     if (!r || r.error) return;
     out[c.id] = {};
-    for (var k = 0; k < 2; k++) {
-      var d = new Date(hoy.getFullYear(), hoy.getMonth() + k, 1);
+    meses.forEach(function (mes) {
+      var d = desdeIsoMes_(mes);
       var f = fechaRegla(r, d.getFullYear(), d.getMonth(), fer);
-      if (f) out[c.id][isoMes_(d)] = isoDia_(f);
-    }
+      if (f) out[c.id][mes] = isoDia_(f);
+    });
   });
   return out;
 }

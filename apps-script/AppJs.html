@@ -286,6 +286,7 @@ function guardarCampo(c, campos) {
   dibujarGrilla();
   return operar('api_guardarConcepto', [datos], campos.vence ? null : null).then(function (r) {
     if (r && campos.vence && S.venc[c.id]) aviso('📅 ' + c.nombre + ': vence el ' + (S.venc[c.id][S.mesHoy] || '').split('-').reverse().join('/'));
+    return r;
   });
 }
 
@@ -386,7 +387,7 @@ function aviso(texto, error, accion) {
 
 /* ---------- Ajustes ---------- */
 function dibujarConfig() {
-  var h = '<div class="card"><h2>Preferencias</h2><p class="sub">Vencimiento, medio de pago y meses futuros se configuran en cada concepto de la planilla (clic en el resumen gris junto a su nombre).</p>';
+  var h = '<div class="card"><h2>Preferencias</h2><p class="sub">Vencimiento, medio de pago y meses futuros se configuran en cada concepto de la planilla (lápiz ✎ junto a su nombre).</p>';
   S.cfgDef.forEach(function (d) {
     var v = S.config[d.k], id = 'cfg_' + d.k;
     var campo;
@@ -517,10 +518,7 @@ function mostrarInstalacion(estado) {
 /* ---------- Arranque ---------- */
 document.querySelectorAll('#navApp button').forEach(function (b) { b.onclick = function () { mostrarVista(b.dataset.v); }; });
 document.addEventListener('keydown', function (e) { if (e.key === 'Escape') $('menu').hidden = true; });
-document.addEventListener('mousedown', function (e) {
-  if (!e.target.closest('#menu')) $('menu').hidden = true;
-  if (!e.target.closest('#ficha') && !e.target.closest('[data-meta]')) cerrarFicha();
-});
+document.addEventListener('mousedown', function (e) { if (!e.target.closest('#menu')) $('menu').hidden = true; });
 $('rapida').addEventListener('input', function () { candidatoElegido = 0; forzarMov = false; actualizarPrevia(); });
 $('rapida').addEventListener('keydown', function (e) {
   if (e.key === 'Enter') { e.preventDefault(); guardarRapida(); }

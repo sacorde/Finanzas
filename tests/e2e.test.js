@@ -79,6 +79,23 @@ test('categorías de un solo nivel, con color; conceptos con vencimiento y medio
   assert.ok(d.venc[luz.id]['2026-10'], 'vencimiento calculado');
 });
 
+test('vencimientos de cada mes (el día cambia mes a mes)', () => {
+  G.api_guardarConcepto({ id: concepto('Luz').id, vence: 'último día' });
+  const d = G.api_datos();
+  const v = d.venc[concepto('Luz').id];
+  assert.strictEqual(v['2026-02'], '2026-02-28');
+  assert.strictEqual(v['2026-04'], '2026-04-30');
+  assert.strictEqual(v['2026-12'], '2026-12-31');
+  assert.strictEqual(v['2027-02'], '2027-02-28');
+  assert.ok(Object.keys(v).length >= 24, 'toda la línea de tiempo');
+  const p = plano(G.api_probarVence('último día', '2027-02'));
+  assert.deepStrictEqual(p.fechas, ['2027-02-28', '2027-03-31', '2027-04-30', '2027-05-31']);
+  assert.ok(p.descripcion);
+  assert.match(plano(G.api_probarVence('cuando pinte', '2026-09')).error, /No entendí/);
+  assert.deepStrictEqual(plano(G.api_probarVence('', '2026-09')).fechas, []);
+  G.api_guardarConcepto({ id: concepto('Luz').id, vence: '1er hábil' });
+});
+
 test('valores: cuentas conservadas, proyección estimada dentro del horizonte', () => {
   const d = G.api_datos();
   const luz = concepto('Luz');

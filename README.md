@@ -4,11 +4,11 @@ App web de finanzas personales que se usa **como un Excel** y guarda todo en **G
 
 ![Planilla](docs/img/planilla.png)
 
-- **Planilla tipo Excel, todo en celdas.** Conceptos en filas y meses en columnas. Categorías, nombres y montos se escriben en la grilla; el vencimiento y el medio de pago se ven resumidos al lado del nombre. Acepta cuentas (`=10615+178223`), copiar y pegar, deshacer, y muestra la suma de la selección.
+- **Planilla tipo Excel, todo en celdas.** Conceptos en filas y meses en columnas. Categorías, nombres y montos se escriben en la grilla; al lado del nombre se ve el día de pago del mes elegido entre paréntesis, ej. *Luz (1)*, *Alquiler (28)* en febrero y *(31)* en marzo. Acepta cuentas (`=10615+178223`), copiar y pegar, deshacer, y muestra la suma de la selección.
 - **Cualquier mes.** Con el selector ‹ mes › vas a cualquier mes pasado o futuro para cargarlo o corregirlo.
 - **Categorías con color, sin subcategorías.** Ingresos (Salario, Aguinaldo, Bonos, Otros), Vivienda, Servicios, Suscripciones, Transporte, Supermercado, Préstamos, Ahorro e Inversión y Eventuales. Cada una tiene su color y un **+** al lado del nombre para agregar una fila.
 - **Arrastre de precios.** Si cargás un aumento en septiembre, los meses siguientes se actualizan solos. Lo que cargás vos se ve en negro; lo que estima el sistema, en *gris itálica*.
-- **Siempre en el mes actual.** La columna del mes está resaltada y los años anteriores se pliegan a su total.
+- **Siempre en el mes actual.** El mes elegido (o *Hoy*) queda como primera columna, resaltado, y los años anteriores se pliegan a su total.
 - **Vencimientos en palabras.** Escribís `15`, `10 hábil`, `1er hábil` o `último hábil`, con feriados de Argentina, y se sincronizan con tu Google Calendar.
 - **Carga rápida.** Escribís `heladera 900k 6 cuotas visa` y queda guardado, repartido en cuotas desde el mes siguiente.
 - **Dashboard.** Salario real contra inflación (IPC INDEC), salario en dólares, aumentos por concepto y gastos por categoría, con filtros.
@@ -70,7 +70,7 @@ Todo se agrega y se modifica en las celdas:
 | Agregar una fila | **+** al lado del nombre de la categoría: aparece una fila nueva, escribís el nombre y Enter. |
 | Agregar una categoría | **+ categoría** al final de la planilla, o clic derecho sobre una categoría. |
 | Renombrar | Escribí sobre el nombre (fila o categoría). |
-| Vence / medio de pago | Clic en el resumen gris junto al nombre (ej. *1er háb. · Déb. aut.*), o clic derecho → Vencimiento. |
+| Editar un concepto | Lápiz **✎** junto al nombre (o F4, o clic derecho → Editar): se abre un panel a la derecha con nombre, categoría, monto del mes, vencimiento (con las fechas que resultan), medio de pago y meses futuros. |
 | Editar | Doble clic, Enter o F2. |
 | Moverse | Flechas, Tab, clic. Shift + flechas o arrastrar para seleccionar un rango. |
 | Borrar un monto | Supr. En un mes futuro vuelve al estimado automático. Para "no se paga", escribí `0`. |

@@ -71,14 +71,17 @@ test('categoría nueva para conceptos de versiones anteriores', () => {
   assert.strictEqual(m('Gastos fijos', 'Otros fijos', 'Cosa rara'), 'Servicios');
 });
 
-test('resumen de vencimiento y medio junto al nombre', () => {
+test('junto al nombre: día de pago del mes y medio de pago', () => {
   const r = (c) => P.resumenConcepto(Object.assign({ tipo: 'fijo', proyeccion: 'Repetir' }, c));
-  assert.strictEqual(r({ vence: '1er hábil', medio: 'Débito automático' }), '1er háb. · Déb. aut.');
-  assert.strictEqual(r({ vence: '10', medio: 'Tarjeta VISA' }), 'día 10 · VISA');
-  assert.strictEqual(r({ vence: 'anteúltimo hábil' }), 'anteúlt. háb.');
-  assert.strictEqual(r({ proyeccion: 'Promedio 3 meses' }), 'prom.');
+  assert.strictEqual(r({ vence: '1er hábil', medio: 'Débito automático' }), 'Déb. aut.');
+  assert.strictEqual(r({ medio: 'Tarjeta VISA', proyeccion: 'Promedio 3 meses' }), 'VISA · prom.');
   assert.strictEqual(r({}), '');
-  assert.strictEqual(r({ tipo: 'eventual', vence: '10', medio: 'Efectivo', proyeccion: 'No proyectar' }), 'Efectivo');
+  assert.strictEqual(r({ tipo: 'eventual', medio: 'Efectivo', proyeccion: 'No proyectar' }), 'Efectivo');
+  const venc = { a: { '2026-02': '2026-02-28', '2026-03': '2026-03-31' } };
+  assert.strictEqual(P.diaDePago(venc, 'a', '2026-02'), 28);
+  assert.strictEqual(P.diaDePago(venc, 'a', '2026-03'), 31);
+  assert.strictEqual(P.diaDePago(venc, 'a', '2026-04'), null);
+  assert.strictEqual(P.diaDePago(venc, 'b', '2026-02'), null);
 });
 
 test('montos: cliente y servidor coinciden', () => {

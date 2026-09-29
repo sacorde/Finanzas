@@ -138,20 +138,33 @@
   .cerrado .caret { transform: rotate(-90deg); }
   table.g tr.item .n { padding-left: 24px; cursor: cell; box-shadow: inset 4px 0 0 color-mix(in srgb, var(--cat) 45%, transparent); }
   table.g tr.item.ev .n { font-size: 12.5px; }
-  table.g tr.item .n .tn { display: inline-block; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; vertical-align: middle; }
-  table.g tr.item .n .meta { float: right; max-width: 48%; margin-left: 8px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11px; font-weight: 500; font-style: normal;
-    color: var(--muted); line-height: 18px; padding: 0 6px; border-radius: 6px; cursor: pointer; margin-top: 1px; }
-  table.g tr.item .n .meta:not(:empty) ~ .tn, table.g tr.item .n .tn:has(+ .meta:not(:empty)) { max-width: 52%; }
-  table.g tr.item .n .meta:hover { background: var(--surface3); color: var(--ink); }
-  table.g tr.item .n .meta:empty::before { content: "+ vence · pago"; opacity: 0; }
-  table.g tr.item.ev .n .meta:empty::before { content: "+ medio de pago"; }
-  table.g tr.item:hover .n .meta:empty::before, table.g td.n.cur .meta:empty::before { opacity: 1; }
-  .ficha { position: fixed; z-index: 60; width: 290px; background: var(--surface); border: 1px solid var(--line); border-radius: 12px; box-shadow: var(--shadow-lg); padding: 12px; display: grid; gap: 10px; font-size: 13px; }
-  .ficha-tit { font-weight: 700; display: flex; align-items: center; color: var(--cat); }
-  .ficha label { display: grid; gap: 4px; font-size: 11px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }
-  .ficha input, .ficha select { font: inherit; font-size: 13px; text-transform: none; letter-spacing: 0; color: var(--ink); background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 7px 9px; }
-  .ficha input:focus, .ficha select:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
-  .ficha-bot { display: flex; gap: 8px; }
+  table.g tr.item .n .tn { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  table.g tr.item .n .dia { margin-left: 5px; font-size: 11.5px; font-weight: 600; color: var(--muted); font-variant-numeric: tabular-nums; }
+  table.g tr.item .n .meta { float: right; max-width: 38%; margin-left: 6px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11px; font-weight: 500;
+    color: var(--muted); line-height: 20px; }
+  table.g tr.item .n .lapiz { float: right; width: 22px; height: 20px; margin-left: 4px; border: 1px solid transparent; border-radius: 6px; background: transparent; color: var(--muted);
+    font-size: 13px; line-height: 1; padding: 0; opacity: .35; cursor: pointer; }
+  table.g tr.item:hover .n .lapiz, table.g td.n.cur .lapiz, .lapiz:focus-visible { opacity: 1; color: var(--cat); border-color: color-mix(in srgb, var(--cat) 40%, transparent); }
+  table.g tr.item .n .lapiz:hover { background: var(--cat); color: #fff; }
+  .panel { position: fixed; top: 0; right: 0; bottom: 0; z-index: 50; width: 380px; max-width: 100vw; background: var(--surface); border-left: 1px solid var(--line);
+    box-shadow: -12px 0 32px rgba(15, 23, 42, .14); display: flex; flex-direction: column; animation: entraPanel .16s ease-out; }
+  @keyframes entraPanel { from { transform: translateX(24px); opacity: 0; } to { transform: none; opacity: 1; } }
+  .panel-cab { display: flex; align-items: center; gap: 10px; padding: 16px 16px 14px; border-bottom: 1px solid var(--line); box-shadow: inset 0 4px 0 var(--cat); }
+  .panel-cab .punto { width: 12px; height: 12px; margin: 0; }
+  .panel-tit { flex: 1; min-width: 0; }
+  .panel-tit h2 { margin: 0; font-size: 17px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .panel-tit span { font-size: 12px; color: var(--muted); }
+  .panel-cuerpo { flex: 1; min-height: 0; overflow: auto; padding: 16px; display: grid; gap: 16px; align-content: start; }
+  .campo-p { display: grid; gap: 6px; font-size: 11px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }
+  .campo-p input, .campo-p select { font: inherit; font-size: 14px; font-weight: 500; text-transform: none; letter-spacing: 0; color: var(--ink); background: var(--surface);
+    border: 1px solid var(--line); border-radius: 9px; padding: 9px 11px; }
+  .campo-p input.num { text-align: right; font-variant-numeric: tabular-nums; }
+  .campo-p input:focus, .campo-p select:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+  .ayuda-p { font-size: 12px; font-weight: 400; text-transform: none; letter-spacing: 0; color: var(--ink2); line-height: 1.45; }
+  .ayuda-p b { color: var(--ink); font-weight: 600; }
+  .ayuda-p.error { color: var(--critical-ink); }
+  .panel-pie { display: flex; gap: 8px; align-items: center; padding: 12px 16px calc(12px + env(safe-area-inset-bottom)); border-top: 1px solid var(--line); background: var(--surface2); }
+  @media (min-width: 1100px) { body.con-panel .grilla-wrap { margin-right: 396px; } }
   table.g td.est { color: var(--muted); font-style: italic; }
   table.g td.cta { background-image: linear-gradient(225deg, var(--s4) 5px, transparent 5px); }
   table.g td.ed { cursor: cell; }
@@ -168,13 +181,6 @@
   .espacio-pie { height: 12px; flex: none; }
 
   /* ---------- Paneles laterales, menús, avisos ---------- */
-  .velo { position: fixed; inset: 0; background: rgba(16,24,40,.25); z-index: 40; }
-  .panel { position: fixed; top: 0; right: 0; bottom: 0; width: min(420px, 100vw); background: var(--surface); z-index: 41; box-shadow: var(--shadow-lg); display: flex; flex-direction: column; transform: translateX(105%); transition: transform .2s ease; }
-  .panel.abierto { transform: translateX(0); }
-  .panel header { display: flex; align-items: center; gap: 10px; padding: 14px 16px; border-bottom: 1px solid var(--line); }
-  .panel header h2 { margin: 0; font-size: 16px; flex: 1; }
-  .panel .cuerpo { padding: 16px; overflow: auto; flex: 1; }
-  .panel footer { padding: 12px 16px; border-top: 1px solid var(--line); display: flex; gap: 8px; justify-content: flex-end; }
   .cerrar { border: 0; background: transparent; font-size: 20px; line-height: 1; color: var(--muted); padding: 4px 8px; border-radius: 8px; }
   .cerrar:hover { background: var(--surface3); }
   .campo { display: flex; flex-direction: column; gap: 4px; margin-bottom: 12px; }

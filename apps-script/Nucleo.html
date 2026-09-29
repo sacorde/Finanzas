@@ -198,20 +198,20 @@ function construirFilas(conceptos, categorias, opts) {
 
 var ABREV_MEDIO = { 'debito automatico': 'Déb. aut.', transferencia: 'Transf.', efectivo: 'Efectivo', 'mercado pago': 'MP' };
 
-/** Resumen corto de vencimiento, medio de pago y proyección, para mostrar junto al nombre. */
+/** Resumen corto de medio de pago y proyección, para mostrar junto al nombre (el día de pago va aparte). */
 function resumenConcepto(c) {
   var partes = [];
-  var v = String(c.vence || '').trim();
-  if (v && c.tipo === 'fijo') {
-    v = /^\d{1,2}$/.test(v) ? 'día ' + v : v.replace(/anteúltimo|anteultimo/i, 'anteúlt.').replace(/último|ultimo/i, 'últ.').replace(/hábil|habil/i, 'háb.').replace(/\s*día$/i, ' día');
-    partes.push(v);
-  }
   var m = String(c.medio || '').trim();
   if (m) partes.push(ABREV_MEDIO[normP(m)] || m.replace(/^tarjeta\s+/i, ''));
   if (c.tipo === 'fijo' && c.proyeccion === 'Promedio 3 meses') partes.push('prom.');
   else if (c.tipo === 'fijo' && c.proyeccion === 'Ajustar por inflación') partes.push('+infl.');
-  else if (c.tipo === 'fijo' && c.proyeccion === 'No proyectar') partes.push('no se repite');
   return partes.join(' · ');
+}
+
+/** Día del mes en que se paga el concepto ese mes (varía: 28/30/31, hábiles, feriados), o null. */
+function diaDePago(venc, cid, mes) {
+  var f = venc && venc[cid] && venc[cid][mes];
+  return f ? Number(f.slice(8)) : null;
 }
 
 /** "900k 6c", "900000 x6", "900k en 6 cuotas" → {texto:'900k', cuotas:6}; null si no hay cuotas. */
