@@ -53,7 +53,14 @@ jobs:
           printf '{"scriptId":"%s","rootDir":"apps-script"}' "$SCRIPT_ID" > .clasp.json
 
       - name: Subir código
-        run: npx --yes @google/clasp@2.4.2 push --force
+        # clasp a veces imprime el error de Google y aun así sale con código 0: revisamos la salida.
+        run: |
+          set -o pipefail
+          npx --yes @google/clasp@2.4.2 push --force 2>&1 | tee push.log
+          if grep -qiE "error|already exists|permission|not found" push.log; then
+            echo "::error::Apps Script rechazó la subida. Ver el mensaje de arriba."
+            exit 1
+          fi
 
       - name: Actualizar app web
         env:
@@ -63,4 +70,4 @@ jobs:
 
       - name: Limpiar credenciales
         if: always()
-        run: rm -f ~/.clasprc.json .clasp.json
+        run: rm -f ~/.clasprc.json .clasp.json push.log

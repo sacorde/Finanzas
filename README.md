@@ -272,7 +272,7 @@ apps-script/          código fuente (lo que sube clasp)
   Calendario.js       sincronización con Google Calendar
   Indices.js          inflación, dólar, feriados, hoja Config
   Migracion.js        importación del Excel anterior / plantilla nueva
-  Dashboard.js        datos para el dashboard
+  DatosDashboard.js   datos para el dashboard
   Main.js             menú, disparadores, tarea diaria
   Panel.html          carga rápida (barra lateral / celular)
   Dashboard.html      dashboard (Chart.js)

@@ -244,7 +244,7 @@ function sincronizarCalendario() {
   return res;
 }
 
-/* ===== Dashboard.js ===== */
+/* ===== DatosDashboard.js ===== */
 
 /**
  * Finanzas · Datos para el dashboard
