@@ -1,8 +1,7 @@
 /**
- * Finanzas · Instalación: importa la planilla anterior (o crea una plantilla)
+ * Finanzas · Lectura de planillas anteriores (Excel original y versión 2)
  *
- * La hoja original NUNCA se borra: se renombra a "Finanzas (original)".
- * Qué se importa:
+ * Qué se importa del Excel original:
  *  - Los meses (fila 1 con ENERO..DICIEMBRE + el año en la columna de total).
  *  - Secciones (MAYÚSCULAS), categorías (títulos sin valores) e ítems.
  *  - Las cuentas escritas a mano (=10615+178223) se conservan como fórmula.
@@ -194,119 +193,113 @@ function modeloPlantilla(hoy) {
   return { meses: meses, filas: filas, movimientos: [] };
 }
 
+/* ------------------------------------------------------------------ */
+/* Versión 2 (planilla con grilla y códigos en la columna A)            */
+/* ------------------------------------------------------------------ */
+
+/** ¿La hoja es la grilla de la versión 2? */
+function esGrillaV2_(sh) {
+  return !!sh && sh.getLastRow() >= 3 && String(sh.getRange(3, 1).getValue()) === 'RES:I';
+}
+
 /**
- * Parte pura: convierte el modelo en las matrices que se escriben en la hoja.
- * Meses consecutivos + una columna "Total AAAA" después de cada diciembre (o fin de año).
+ * Lee la grilla v2 al mismo formato que modeloDesdeLegado: {filas, movimientos}.
+ * Parte pura: recibe matrices (cabecera, izquierda, valores, fórmulas, estilos) de la hoja.
  */
-function matricesDesdeModelo(modelo) {
+function modeloDesdeV2(cab, izq, vals, forms, estilos, movsV2) {
   var cols = [];
-  var meses = modelo.meses.slice();
-  // Completar años enteros
-  if (meses.length) {
-    var y0 = meses[0].getFullYear(), y1 = meses[meses.length - 1].getFullYear();
-    meses = [];
-    for (var y = y0; y <= y1; y++) for (var m = 0; m < 12; m++) meses.push(new Date(y, m, 1));
+  for (var c = 6; c < cab[1].length; c++) if (cab[1][c] instanceof Date) cols.push({ c: c, iso: isoMes_(cab[1][c]) });
+  var filas = [], esMov = false;
+  for (var r = 2; r < izq.length; r++) {
+    var tipo = String(izq[r][0]).trim(), nombre = String(izq[r][1]).trim();
+    if (tipo.indexOf('RES:') === 0) continue;
+    if (tipo.indexOf('SEC:') === 0) {
+      var p = tipo.split(':');
+      esMov = p[2] === 'MOV';
+      var sec = seccionPorNombre_(nombre);
+      filas.push({ tipo: 'SEC', nombre: sec ? sec.nombre : titulo_(nombre), clase: p[1] || 'G', mov: esMov });
+      continue;
+    }
+    if (tipo === 'CAT') { filas.push({ tipo: 'CAT', nombre: nombre }); continue; }
+    if (!nombre) continue;
+    var celdas = {};
+    if (!esMov) {
+      cols.forEach(function (col) {
+        var f = forms[r][col.c], v = vals[r][col.c];
+        if (f && esFormulaAritmetica(f)) celdas[col.iso] = { f: f, v: typeof v === 'number' ? v : (parsearMonto(f) || {}).valor, proy: estilos[r][col.c] === 'italic' };
+        else if (typeof v === 'number') celdas[col.iso] = { v: v, f: '', proy: estilos[r][col.c] === 'italic' };
+      });
+    }
+    filas.push({ tipo: 'ITEM', nombre: nombre, vence: String(izq[r][2] || ''), medio: String(izq[r][4] || ''), proy: String(izq[r][5] || '') || modoProyeccionSugerido(nombre), celdas: celdas });
   }
-  meses.forEach(function (d, i) {
-    cols.push({ tipo: 'MES', fecha: d, iso: isoMes_(d) });
-    if (d.getMonth() === 11 || i === meses.length - 1) cols.push({ tipo: 'TOT', anio: d.getFullYear() });
+  var movimientos = (movsV2 || []).filter(function (m) { return String(m[1] || '').trim(); }).map(function (m) {
+    var fecha = m[0] instanceof Date ? m[0] : null;
+    var mes = m[7] instanceof Date ? m[7] : (m[6] instanceof Date ? m[6] : fecha);
+    return { fecha: fecha || mes || new Date(), desc: String(m[1]), cat: String(m[2] || 'Otros'), monto: m[3], cuotas: Number(m[4]) || 1, medio: String(m[5] || ''), mes: mes || fecha, nota: String(m[10] || '') };
   });
-  var fila1 = ['', 'FINANZAS', '', '', '', ''], fila2 = ['', 'Concepto', 'Vence', 'Próximo', 'Medio de pago', 'Proyección'];
-  cols.forEach(function (c) {
-    fila1.push(c.tipo === 'MES' ? (c.fecha.getMonth() === 0 ? c.fecha.getFullYear() : '') : '');
-    fila2.push(c.tipo === 'MES' ? c.fecha : 'Total ' + c.anio);
-  });
-  var izq = [
-    ['RES:I', 'Ingresos', '', '', '', ''], ['RES:G', 'Gastos', '', '', '', ''],
-    ['RES:A', 'Ahorro e inversión', '', '', '', ''], ['RES:L', 'Libre del mes', '', '', '', ''], ['', '', '', '', '', '']
-  ];
-  var grilla = [], estilos = [], colores = [];
-  var vacia = function () { return cols.map(function () { return ''; }); };
-  for (var k = 0; k < 5; k++) { grilla.push(vacia()); estilos.push(cols.map(function () { return 'normal'; })); colores.push(cols.map(function () { return FZ.C.tinta; })); }
-  modelo.filas.forEach(function (f) {
-    var a = f.tipo === 'SEC' ? 'SEC:' + f.clase + (f.mov ? ':MOV' : '') : f.tipo === 'CAT' ? 'CAT' : '';
-    izq.push([a, f.tipo === 'SEP' ? '' : f.nombre, f.vence || '', '', f.medio || '', f.tipo === 'ITEM' && f.proy ? f.proy : '']);
-    var g = [], e = [], co = [];
-    cols.forEach(function (c) {
-      var celda = c.tipo === 'MES' && f.celdas ? f.celdas[c.iso] : null;
-      g.push(celda ? (celda.f || celda.v) : '');
-      e.push(celda && celda.proy ? 'italic' : 'normal');
-      co.push(celda && celda.proy ? FZ.C.estimado : FZ.C.tinta);
+  return { filas: filas, movimientos: movimientos };
+}
+
+function leerV2_(ss) {
+  var sh = ss.getSheetByName('Finanzas');
+  var lr = sh.getLastRow(), lc = sh.getLastColumn();
+  var rng = sh.getRange(1, 1, lr, lc);
+  var shm = ss.getSheetByName('Movimientos');
+  var movs = [];
+  if (shm && String(shm.getRange(1, 1).getValue()) === 'Fecha' && shm.getLastRow() > 1) {
+    var rm = shm.getRange(2, 1, shm.getLastRow() - 1, 11);
+    var mv = rm.getValues(), mf = rm.getFormulas();
+    movs = mv.map(function (r, i) { if (mf[i][3] && esFormulaAritmetica(mf[i][3])) r[3] = mf[i][3]; return r; });
+  }
+  var vals = rng.getValues();
+  return modeloDesdeV2(vals.slice(0, 2), vals.map(function (r) { return r.slice(0, 6); }), vals, rng.getFormulas(), rng.getFontStyles(), movs);
+}
+
+/** Qué hay para importar en la planilla. */
+function detectarFuente_(ss) {
+  var v2 = ss.getSheetByName('Finanzas');
+  if (esGrillaV2_(v2)) return { tipo: 'v2', hoja: 'Finanzas', descripcion: 'la planilla Finanzas que instalaste (con tus cambios)' };
+  var candidatas = ['Finanzas (original)', 'Finanzas'];
+  for (var i = 0; i < candidatas.length; i++) {
+    var sh = ss.getSheetByName(candidatas[i]);
+    if (sh && sh.getLastColumn() > 3) {
+      var f1 = sh.getRange(1, 1, 1, Math.min(sh.getLastColumn(), 20)).getValues()[0].map(norm_);
+      if (f1.indexOf('enero') >= 0) return { tipo: 'legado', hoja: candidatas[i], descripcion: 'tu Excel original (hoja "' + candidatas[i] + '")' };
+    }
+  }
+  return { tipo: 'plantilla', descripcion: 'una planilla nueva con conceptos de ejemplo' };
+}
+
+/** Convierte filas (SEC/CAT/ITEM) y movimientos al formato de las tablas. Parte pura. */
+function filasAdb_(filas, movimientos) {
+  var sec = null, cat = null, orden = 0, conceptos = [], valores = [];
+  var eventuales = {};
+  filas.forEach(function (f) {
+    if (f.tipo === 'SEC') { sec = { nombre: f.nombre, clase: f.clase, tipo: f.mov ? 'eventual' : 'fijo' }; cat = null; return; }
+    if (f.tipo === 'CAT') { cat = f.nombre; return; }
+    if (f.tipo !== 'ITEM' || !sec) return;
+    var id = nuevoId_();
+    orden += 10;
+    conceptos.push({
+      id: id, nombre: f.nombre, seccion: sec.nombre, clase: sec.clase, categoria: sec.tipo === 'eventual' ? f.nombre : (cat || sec.nombre),
+      tipo: sec.tipo, vence: String(f.vence || ''), medio: f.medio || '', proyeccion: sec.tipo === 'eventual' ? '' : (f.proy || 'Repetir'), orden: orden
     });
-    grilla.push(g); estilos.push(e); colores.push(co);
+    if (sec.tipo === 'eventual') { eventuales[f.nombre] = true; return; }
+    Object.keys(f.celdas || {}).sort().forEach(function (iso) {
+      var c = f.celdas[iso];
+      var cuenta = c.f ? String(c.f).replace(/^=\+?\s*/, '') : '';
+      var monto = cuenta ? (parsearMonto(cuenta) || { valor: Number(c.v) || 0 }).valor : Number(c.v) || 0;
+      valores.push({ concepto: id, mes: iso, monto: monto, cuenta: cuenta, estado: c.proy ? 'estimado' : 'confirmado' });
+    });
   });
-  return { cabecera: [fila1, fila2], izq: izq, grilla: grilla, estilos: estilos, colores: colores, nCols: cols.length };
-}
-
-/* ------------------------------------------------------------------ */
-/* Escritura en la planilla                                            */
-/* ------------------------------------------------------------------ */
-
-function crearHojaFinanzas_(ss, modelo) {
-  var sh = ss.insertSheet(FZ.HOJA, 0);
-  var mz = matricesDesdeModelo(modelo);
-  var totalCols = FZ.COL_MES0 - 1 + mz.nCols;
-  var totalFilas = 2 + mz.izq.length;
-  if (sh.getMaxColumns() < totalCols) sh.insertColumnsAfter(sh.getMaxColumns(), totalCols - sh.getMaxColumns());
-  if (sh.getMaxRows() < totalFilas + 20) sh.insertRowsAfter(sh.getMaxRows(), totalFilas + 20 - sh.getMaxRows());
-  sh.getRange(1, 1, 2, totalCols).setValues(mz.cabecera);
-  sh.getRange(3, 1, mz.izq.length, FZ.COL_PROY).setValues(mz.izq);
-  var g = sh.getRange(3, FZ.COL_MES0, mz.grilla.length, mz.nCols);
-  g.setValues(mz.grilla);
-  g.setFontStyles(mz.estilos);
-  g.setFontColors(mz.colores);
-  // Quitar columnas sobrantes a la derecha
-  if (sh.getMaxColumns() > totalCols) sh.deleteColumns(totalCols + 1, sh.getMaxColumns() - totalCols);
-  return sh;
-}
-
-/** Instalación completa. Devuelve un resumen para mostrar. */
-function instalarSistema_(usarLegado) {
-  var ss = ss_();
-  var hoy = new Date();
-  ss.setSpreadsheetTimeZone('America/Argentina/Buenos_Aires');
-  try { ss.setSpreadsheetLocale('es_AR'); } catch (e) { /* opcional */ }
-  PropertiesService.getScriptProperties().setProperty('SS_ID', ss.getId());
-
-  crearHojaConfig_(ss);
-  crearHojaIndices_(ss);
-  try { actualizarFeriados_(hoy.getFullYear()); actualizarFeriados_(hoy.getFullYear() + 1); } catch (e) { console.warn(e); }
-
-  var vieja = ss.getSheetByName(FZ.HOJA), modelo, avisos = [], origen = 'plantilla';
-  if (vieja && usarLegado) {
-    var rng = vieja.getDataRange();
-    var leg = parsearLegado(rng.getValues(), rng.getFormulas());
-    modelo = modeloDesdeLegado(leg, hoy, {});
-    avisos = leg.avisos;
-    origen = 'importado';
-  } else {
-    modelo = modeloPlantilla(hoy);
-  }
-  if (vieja) {
-    var nombreViejo = FZ.HOJA + ' (original)';
-    var n = 2;
-    while (ss.getSheetByName(nombreViejo)) nombreViejo = FZ.HOJA + ' (original ' + n++ + ')';
-    vieja.setName(nombreViejo);
-  }
-  crearHojaMovimientos_(ss, modelo.movimientos);
-  var sh = crearHojaFinanzas_(ss, modelo);
-  CFG_CACHE_ = null;
-  asegurarLineaDeTiempo(sh);
-  var est = leerEstructura(sh);
-  reconstruirFormulas(sh, est);
-  aplicarFormato(sh, est);
-  reproyectar(sh, est);
-  actualizarProximos(sh, est);
-  actualizarValidacionMovimientos_(est);
-  ss.setActiveSheet(sh);
-  enfocarMesActual(sh, est);
-  PropertiesService.getDocumentProperties().setProperty('ultimoMes', isoMes_(hoy));
-  PropertiesService.getDocumentProperties().setProperty('version', FZ.VERSION);
-  return {
-    origen: origen,
-    items: est.items.filter(function (i) { return !i.mov; }).length,
-    movimientos: modelo.movimientos.length,
-    meses: est.meses.length,
-    avisos: avisos
-  };
+  var movs = (movimientos || []).map(function (m) {
+    var cuenta = typeof m.monto === 'string' && m.monto.charAt(0) === '=' ? m.monto.slice(1) : '';
+    var monto = cuenta ? (parsearMonto(cuenta) || { valor: 0 }).valor : Number(m.monto) || 0;
+    var categoria = eventuales[m.cat] ? m.cat : (eventuales.Otros ? 'Otros' : m.cat);
+    return {
+      id: nuevoId_(), fecha: m.fecha instanceof Date ? isoDia_(m.fecha) : String(m.fecha), descripcion: m.desc, categoria: categoria,
+      monto: monto, cuenta: cuenta, cuotas: m.cuotas || 1, medio: m.medio || '', mes: m.mes instanceof Date ? isoMes_(m.mes) : String(m.mes || ''), nota: m.nota || ''
+    };
+  }).filter(function (m) { return m.monto; });
+  return { conceptos: conceptos, valores: valores, movimientos: movs };
 }

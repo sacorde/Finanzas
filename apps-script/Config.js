@@ -1,107 +1,81 @@
 /**
- * Finanzas · Configuración general
- * Constantes de layout, paleta y lectura de la hoja "Config".
+ * Finanzas · Configuración y esquema de la base de datos
+ *
+ * La planilla de Google Sheets es solo la base de datos: una hoja por tabla,
+ * fila 1 = encabezados, una fila por registro. Toda la interfaz es la app web.
  */
 
 var FZ = {
-  VERSION: '2.0.0',
-  HOJA: 'Finanzas',
-  HOJA_MOV: 'Movimientos',
-  HOJA_IND: 'Índices',
-  HOJA_CFG: 'Config',
-
-  // Layout de la hoja Finanzas
-  FILA_ANIO: 1,
-  FILA_MES: 2,
-  FILAS_CONGELADAS: 6,
-  COL_TIPO: 1,     // A (oculta): códigos de estructura
-  COL_NOMBRE: 2,   // B: concepto
-  COL_VENCE: 3,    // C: regla de vencimiento ("15", "1er hábil", ...)
-  COL_PROX: 4,     // D: próximo vencimiento (automático)
-  COL_MEDIO: 5,    // E: medio de pago
-  COL_PROY: 6,     // F: modo de proyección
-  COL_MES0: 7,     // G: primer mes
-
-  // Códigos de la columna A
-  RES: 'RES:',     // RES:I, RES:G, RES:A, RES:L (filas resumen)
-  SEC: 'SEC:',     // SEC:I, SEC:G, SEC:A, SEC:G:MOV (secciones)
-  CAT: 'CAT',      // encabezado de categoría (subtotal)
-
+  VERSION: '3.0.0',
+  T: { CONCEPTOS: 'Conceptos', VALORES: 'Valores', MOV: 'Movimientos', IND: 'Indices', FER: 'Feriados', CFG: 'Config' },
   PROY: ['Repetir', 'Promedio 3 meses', 'Ajustar por inflación', 'No proyectar'],
+  SECCIONES: [
+    { nombre: 'Ingresos', clase: 'I', tipo: 'fijo' },
+    { nombre: 'Gastos fijos', clase: 'G', tipo: 'fijo' },
+    { nombre: 'Préstamos y deudas', clase: 'G', tipo: 'fijo' },
+    { nombre: 'Ahorro e inversión', clase: 'A', tipo: 'fijo' },
+    { nombre: 'Eventuales', clase: 'G', tipo: 'eventual' }
+  ]
+};
 
-  // Movimientos (columnas)
-  MOV: { FECHA: 1, DESC: 2, CAT: 3, MONTO: 4, CUOTAS: 5, MEDIO: 6, MES: 7, DESDE: 8, HASTA: 9, POR_MES: 10, NOTA: 11 },
-
-  // Paleta (tokens)
-  C: {
-    tinta: '#0F172A', tinta2: '#475569', tenue: '#94A3B8', linea: '#E8ECF2',
-    fondo: '#FFFFFF', fondo2: '#F8FAFC', fondoTotal: '#F1F5F9',
-    cabecera: '#0F172A', cabeceraTxt: '#FFFFFF', cabecera2: '#1E293B',
-    acento: '#4F46E5', acentoSuave: '#EEF2FF',
-    estimado: '#94A3B8',
-    ingreso: '#047857', ingresoSuave: '#ECFDF5',
-    gasto: '#334155', gastoSuave: '#F1F5F9',
-    eventual: '#B45309', eventualSuave: '#FFF7ED',
-    ahorro: '#1D4ED8', ahorroSuave: '#EFF6FF',
-    ok: '#047857', mal: '#B91C1C', malSuave: '#FEF2F2', aviso: '#92400E', avisoSuave: '#FEF3C7'
-  },
-  FUENTE: 'Inter',
-  FORMATO_NUM: '#,##0;-#,##0;"–"',
-  FORMATO_NUM_RES: '"$ "#,##0;-"$ "#,##0;"–"'
+/** Columnas de cada tabla. `texto`: columnas que se guardan como texto plano (evita que Sheets las convierta en fechas o fórmulas). */
+var ESQUEMA = {
+  Conceptos: { cols: ['id', 'nombre', 'seccion', 'clase', 'categoria', 'tipo', 'vence', 'medio', 'proyeccion', 'orden'], texto: ['id', 'nombre', 'seccion', 'clase', 'categoria', 'tipo', 'vence', 'medio', 'proyeccion'] },
+  Valores: { cols: ['concepto', 'mes', 'monto', 'cuenta', 'estado'], texto: ['concepto', 'mes', 'cuenta', 'estado'] },
+  Movimientos: { cols: ['id', 'fecha', 'descripcion', 'categoria', 'monto', 'cuenta', 'cuotas', 'medio', 'mes', 'nota'], texto: ['id', 'fecha', 'descripcion', 'categoria', 'cuenta', 'medio', 'mes', 'nota'] },
+  Indices: { cols: ['mes', 'inflacion', 'dolar_oficial', 'dolar_blue', 'origen'], texto: ['mes', 'origen'] },
+  Feriados: { cols: ['fecha', 'nombre', 'origen'], texto: ['fecha', 'nombre', 'origen'] },
+  Config: { cols: ['clave', 'valor', 'descripcion'], texto: ['clave', 'valor', 'descripcion'] }
 };
 
 var MESES_ES = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
-var MESES_CORTO = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
 
-/** Definición de la hoja Config: etiqueta visible → clave interna. */
+/** Preferencias generales (tabla Config). */
 var CFG_DEF = [
-  { k: 'horizonte', label: 'Meses a proyectar hacia adelante', def: 12, ayuda: 'Hasta cuántos meses se completan automáticamente los gastos fijos.' },
-  { k: 'inflacion', label: 'Inflación mensual esperada (%)', def: '', ayuda: 'Vacío = usa la última inflación publicada (hoja Índices). Se usa para "Ajustar por inflación".' },
-  { k: 'cerrarMes', label: 'Confirmar estimados al cerrar el mes', def: 'Sí', ayuda: 'Al empezar un mes nuevo, los valores estimados del mes anterior pasan a confirmados.' },
-  { k: 'confirmarDA', label: 'Confirmar débitos automáticos al vencer', def: 'Sí', ayuda: 'El día del vencimiento, los conceptos con "Débito automático" se confirman solos.' },
-  { k: 'tarjetaMesSig', label: 'Compras con tarjeta impactan el mes siguiente', def: 'Sí', ayuda: 'En Movimientos, una compra con tarjeta se imputa al mes siguiente (cuando se paga el resumen).' },
-  { k: 'calendario', label: 'Calendario de vencimientos', def: 'Finanzas', ayuda: 'Nombre del Google Calendar donde se crean los vencimientos. Vacío = no sincronizar.' },
-  { k: 'mesesCal', label: 'Meses a sincronizar en el calendario', def: 2, ayuda: 'Mes actual + los siguientes.' },
-  { k: 'aviso', label: 'Aviso previo (días)', def: 1, ayuda: 'Notificación del calendario a las 9:00, N días antes del vencimiento.' },
-  { k: 'dolar', label: 'Dólar de referencia', def: 'Blue', ayuda: 'Blue u Oficial (para ver montos en USD en el dashboard).' },
-  { k: 'medios', label: 'Medios de pago', def: 'Débito automático, Tarjeta VISA, Tarjeta AMEX, Transferencia, Efectivo, Mercado Pago', ayuda: 'Separados por coma. Aparecen en los desplegables.' }
+  { k: 'horizonte', def: '12', ayuda: 'Meses hacia adelante que se completan automáticamente.' },
+  { k: 'inflacion', def: '', ayuda: 'Inflación mensual esperada (%). Vacío = última publicada. Se usa en "Ajustar por inflación".' },
+  { k: 'cerrarMes', def: 'Sí', ayuda: 'Al empezar un mes, los estimados del mes anterior pasan a confirmados.' },
+  { k: 'confirmarDA', def: 'Sí', ayuda: 'El día del vencimiento, los débitos automáticos se confirman solos.' },
+  { k: 'tarjetaMesSig', def: 'Sí', ayuda: 'Las compras con tarjeta impactan el mes siguiente.' },
+  { k: 'calendario', def: 'Finanzas', ayuda: 'Google Calendar donde se crean los vencimientos. Vacío = no sincronizar.' },
+  { k: 'mesesCal', def: '2', ayuda: 'Meses a sincronizar en el calendario (el actual + los siguientes).' },
+  { k: 'aviso', def: '1', ayuda: 'Aviso del calendario a las 9:00, N días antes.' },
+  { k: 'dolar', def: 'Blue', ayuda: 'Blue u Oficial, para ver montos en USD.' },
+  { k: 'medios', def: 'Débito automático, Tarjeta VISA, Tarjeta AMEX, Transferencia, Efectivo, Mercado Pago', ayuda: 'Medios de pago, separados por coma.' }
 ];
-var CFG_FILA_FERIADOS = 16; // título de la tabla de feriados
 
 function ss_() {
-  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var ss = null;
+  try { ss = SpreadsheetApp.getActiveSpreadsheet(); } catch (e) { /* app web */ }
   if (ss) return ss;
   var id = PropertiesService.getScriptProperties().getProperty('SS_ID');
+  if (!id) throw new Error('No encuentro la planilla. Abrí la planilla una vez y usá el menú Finanzas → Abrir la app.');
   return SpreadsheetApp.openById(id);
 }
 
-function hoja_(nombre) {
-  return ss_().getSheetByName(nombre || FZ.HOJA);
-}
-
 var CFG_CACHE_ = null;
+/** Config normalizada (con valores por defecto). */
 function leerConfig() {
   if (CFG_CACHE_) return CFG_CACHE_;
   var cfg = {};
   CFG_DEF.forEach(function (d) { cfg[d.k] = d.def; });
-  var sh = hoja_(FZ.HOJA_CFG);
-  if (sh) {
-    var vals = sh.getRange(1, 1, Math.min(sh.getLastRow() || 1, CFG_FILA_FERIADOS - 1), 2).getValues();
-    var porLabel = {};
-    vals.forEach(function (r) { porLabel[String(r[0]).trim()] = r[1]; });
-    CFG_DEF.forEach(function (d) {
-      if (porLabel.hasOwnProperty(d.label) && porLabel[d.label] !== '') cfg[d.k] = porLabel[d.label];
-      else if (porLabel.hasOwnProperty(d.label) && d.k === 'inflacion') cfg[d.k] = '';
-      else if (porLabel.hasOwnProperty(d.label) && d.k === 'calendario') cfg[d.k] = '';
-    });
-  }
-  cfg.horizonte = Math.max(1, Math.min(36, Number(cfg.horizonte) || 12));
-  cfg.mesesCal = Math.max(1, Math.min(6, Number(cfg.mesesCal) || 2));
-  cfg.aviso = Math.max(0, Math.min(14, Number(cfg.aviso) || 0));
-  ['cerrarMes', 'confirmarDA', 'tarjetaMesSig'].forEach(function (k) { cfg[k] = esSi_(cfg[k]); });
-  cfg.medios = String(cfg.medios).split(',').map(function (s) { return s.trim(); }).filter(String);
-  CFG_CACHE_ = cfg;
-  return cfg;
+  leerTabla(FZ.T.CFG).forEach(function (r) {
+    if (r.clave && cfg.hasOwnProperty(r.clave)) cfg[r.clave] = String(r.valor == null ? '' : r.valor);
+  });
+  CFG_CACHE_ = normalizarConfig_(cfg);
+  return CFG_CACHE_;
+}
+
+function normalizarConfig_(cfg) {
+  var out = {};
+  Object.keys(cfg).forEach(function (k) { out[k] = cfg[k]; });
+  out.horizonte = Math.max(1, Math.min(36, Number(cfg.horizonte) || 12));
+  out.mesesCal = Math.max(1, Math.min(6, Number(cfg.mesesCal) || 2));
+  out.aviso = Math.max(0, Math.min(14, Number(cfg.aviso) || 0));
+  ['cerrarMes', 'confirmarDA', 'tarjetaMesSig'].forEach(function (k) { out[k] = esSi_(cfg[k]); });
+  out.medios = String(cfg.medios).split(',').map(function (s) { return s.trim(); }).filter(String);
+  out.dolar = norm_(cfg.dolar) === 'oficial' ? 'oficial' : 'blue';
+  return out;
 }
 
 function esSi_(v) {
@@ -110,14 +84,10 @@ function esSi_(v) {
   return s === 'si' || s === 'yes' || s === 'true' || s === '1';
 }
 
-/** Normaliza texto: minúsculas, sin acentos, espacios simples. */
+/** Minúsculas, sin acentos, espacios simples. */
 function norm_(s) {
   return String(s == null ? '' : s).toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '')
     .replace(/\s+/g, ' ').trim();
-}
-
-function primerDia_(d) {
-  return new Date(d.getFullYear(), d.getMonth(), 1);
 }
 
 function isoMes_(d) {
@@ -133,7 +103,19 @@ function desdeIsoMes_(iso) {
   return new Date(Number(p[0]), Number(p[1]) - 1, 1);
 }
 
-function etiquetaMes_(d) {
+function desdeIsoDia_(iso) {
+  var p = String(iso).split('-');
+  return new Date(Number(p[0]), Number(p[1]) - 1, Number(p[2] || 1));
+}
+
+/** 'YYYY-MM' + k meses. */
+function sumarMes_(iso, k) {
+  var d = desdeIsoMes_(iso);
+  return isoMes_(new Date(d.getFullYear(), d.getMonth() + k, 1));
+}
+
+function etiquetaMes_(iso) {
+  var d = desdeIsoMes_(iso);
   return MESES_ES[d.getMonth()].charAt(0).toUpperCase() + MESES_ES[d.getMonth()].slice(1) + ' ' + d.getFullYear();
 }
 
@@ -141,4 +123,10 @@ function fmtPesos_(n) {
   var v = Math.round(Number(n) || 0);
   var s = String(Math.abs(v)).replace(/\B(?=(\d{3})+(?!\d))/g, '.');
   return (v < 0 ? '-$ ' : '$ ') + s;
+}
+
+var ID_SEQ_ = 0;
+function nuevoId_() {
+  ID_SEQ_++;
+  return (Date.now().toString(36) + Math.floor(Math.random() * 1e6).toString(36) + ID_SEQ_.toString(36)).slice(-10);
 }

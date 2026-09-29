@@ -38,10 +38,10 @@ test('respeta el horizonte y no reescribe lo que ya está igual', () => {
   assert.deepStrictEqual(plano(G.calcularProyeccion(celdas, 1, 2, 'Repetir', 0)), []);
 });
 
-test('copia fórmulas (cuentas y referencias relativas)', () => {
-  const celdas = [conf(33936, '=2828*3*4'), vacia(), conf(500, '=R[-3]C*20%'), vacia()];
+test('copia las cuentas escritas a mano', () => {
+  const celdas = [conf(33936, '=2828*3*4'), vacia(), conf(500, '=250+250'), vacia()];
   const ch = plano(G.calcularProyeccion(celdas, 1, 3, 'Repetir', 0));
-  assert.deepStrictEqual(ch.map((c) => [c.i, c.f]), [[1, '=2828*3*4'], [3, '=R[-3]C*20%']]);
+  assert.deepStrictEqual(ch.map((c) => [c.i, c.f, c.v]), [[1, '=2828*3*4', 33936], [3, '=250+250', 500]]);
 });
 
 test('promedio de 3 meses y ajuste por inflación', () => {

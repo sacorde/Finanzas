@@ -40,15 +40,14 @@ class Range {
   getFormulasR1C1() { return this._map((c) => c.r1); }
   setValues(a) {
     return this._set(a, (c, v, r, col) => {
-      if (typeof v === 'string' && v.charAt(0) === '=') { c.f = v; c.r1 = a1aR1C1(v, r, col); c.v = ''; }
+      if (typeof v === 'string' && v.charAt(0) === "'") { c.v = v.slice(1); c.f = ''; c.r1 = ''; }
+      else if (typeof v === 'string' && v.charAt(0) === '=') { c.f = v; c.r1 = a1aR1C1(v, r, col); c.v = ''; }
       else { c.v = v === null || v === undefined ? '' : v; c.f = ''; c.r1 = ''; }
     });
   }
   setValue(v) { return this._all((c, r, col) => new Range(this._s, r, col, 1, 1).setValues([[v]])); }
   setFormulas(a) { return this._set(a, (c, f, r, col) => { c.f = f; c.r1 = f ? a1aR1C1(f, r, col) : ''; c.v = ''; }); }
   setFormula(f) { return this.setFormulas(this._map(() => f)); }
-  setFormulasR1C1(a) { return this._set(a, (c, f, r, col) => { c.r1 = f; c.f = f ? this._s._ctx.r1c1aA1(f, r, col) : ''; c.v = ''; }); }
-  setFormulaR1C1(f) { return this.setFormulasR1C1(this._map(() => f)); }
   clearContent() { return this._all((c) => { c.v = ''; c.f = ''; c.r1 = ''; }); }
   getFontStyles() { return this._map((c) => c.style); } getFontStyle() { return this.getFontStyles()[0][0]; }
   setFontStyles(a) { return this._set(a, (c, v) => { c.style = v; }); }
@@ -110,8 +109,13 @@ class Sheet {
 }
 
 class Spreadsheet {
-  constructor(ctx) { this._ctx = ctx; this._sheets = []; this._toasts = []; }
+  constructor(ctx, nombre) { this._ctx = ctx; this._sheets = []; this._toasts = []; this._nombre = nombre || 'Finanzas'; this._copias = []; }
   getId() { return 'ss-test'; }
+  getName() { return this._nombre; }
+  getUrl() { return 'https://docs.google.com/spreadsheets/d/ss-test'; }
+  copy(nombre) { const c = { nombre, hojas: this._sheets.map((s) => s._name), getUrl: () => 'https://docs.google.com/copia/' + encodeURIComponent(nombre) }; this._copias.push(c); return c; }
+  deleteSheet(sh) { this._sheets = this._sheets.filter((s) => s !== sh); }
+  moveActiveSheet(pos) { const s = this._activa; this._sheets = this._sheets.filter((x) => x !== s); this._sheets.splice(pos - 1, 0, s); }
   getSheetByName(n) { return this._sheets.find((s) => s._name === n) || null; }
   getSheets() { return this._sheets.slice(); }
   insertSheet(n, idx) {
@@ -166,7 +170,19 @@ function crearEntorno(ctx) {
     PropertiesService: { getDocumentProperties: () => doc, getUserProperties: () => user, getScriptProperties: () => script },
     LockService: { getScriptLock: () => ({ waitLock() {}, releaseLock() {} }) },
     UrlFetchApp: { fetch: () => { throw new Error('sin red en tests'); } },
-    CalendarApp: { getCalendarsByName: () => [], createCalendar: () => cal, getCalendarById: () => { throw new Error('sin calendario'); }, Color: { GREEN: 'GREEN' } }
+    CalendarApp: { getCalendarsByName: () => [], createCalendar: () => cal, getCalendarById: () => { throw new Error('sin calendario'); }, Color: { GREEN: 'GREEN' } },
+    ScriptApp: {
+      _triggers: [],
+      getProjectTriggers() { return this._triggers.slice(); },
+      deleteTrigger(t) { this._triggers = this._triggers.filter((x) => x !== t); },
+      newTrigger(fn) {
+        const self = this, t = { fn, getHandlerFunction: () => fn };
+        const b = { timeBased: () => b, everyDays: () => b, atHour: () => b, forSpreadsheet: () => b, onOpen: () => b, create: () => { self._triggers.push(t); return t; } };
+        return b;
+      },
+      getService: () => ({ getUrl: () => 'https://script.google.com/macros/s/test/dev' })
+    },
+    Utilities: { formatDate: (d) => d.toISOString().slice(0, 16).replace('T', ' ') }
   });
   return { ss, doc, user, eventos };
 }

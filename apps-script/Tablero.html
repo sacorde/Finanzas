@@ -1,136 +1,91 @@
-<!DOCTYPE html>
-<html lang="es">
-<head>
-<base target="_top">
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Dashboard · Finanzas</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 <style>
-  :root {
-    color-scheme: light;
-    --page: #F6F7F9; --surface: #FFFFFF; --surface2: #F8FAFC; --line: #E5E7EB; --grid: #EEF0F3; --axis: #C3C2B7;
-    --ink: #0B0B0B; --ink2: #52514E; --muted: #898781;
-    --accent: #4F46E5; --accent-soft: #EEF2FF; --accent-ink: #3730A3;
-    --good: #0CA30C; --good-ink: #006300; --good-soft: #ECFDF3; --critical: #D03B3B; --critical-ink: #B42318; --critical-soft: #FEF3F2; --warning: #FAB219;
-    --s1: #2A78D6; --s2: #EB6834; --s3: #1BAF7A; --s4: #EDA100; --s5: #E87BA4; --s6: #008300; --s7: #4A3AA7; --s8: #E34948; --otros: #A8A7A1;
-    --shadow: 0 1px 2px rgba(15,23,42,.05), 0 1px 1px rgba(15,23,42,.03);
-  }
-  @media (prefers-color-scheme: dark) {
-    :root:not([data-theme="light"]) {
-      color-scheme: dark;
-      --page: #0D0D0D; --surface: #1A1A19; --surface2: #222220; --line: #2C2C2A; --grid: #2C2C2A; --axis: #383835;
-      --ink: #FFFFFF; --ink2: #C3C2B7; --muted: #898781;
-      --accent: #818CF8; --accent-soft: #23234A; --accent-ink: #C7D2FE;
-      --good-ink: #0CA30C; --good-soft: #0F2A14; --critical-ink: #F07070; --critical-soft: #3A1717;
-      --s1: #3987E5; --s2: #D95926; --s3: #199E70; --s4: #C98500; --s5: #D55181; --s6: #008300; --s7: #9085E9; --s8: #E66767; --otros: #6B6A66;
-    }
-  }
-  :root[data-theme="dark"] {
-    color-scheme: dark;
-    --page: #0D0D0D; --surface: #1A1A19; --surface2: #222220; --line: #2C2C2A; --grid: #2C2C2A; --axis: #383835;
-    --ink: #FFFFFF; --ink2: #C3C2B7; --muted: #898781;
-    --accent: #818CF8; --accent-soft: #23234A; --accent-ink: #C7D2FE;
-    --good-ink: #0CA30C; --good-soft: #0F2A14; --critical-ink: #F07070; --critical-soft: #3A1717;
-    --s1: #3987E5; --s2: #D95926; --s3: #199E70; --s4: #C98500; --s5: #D55181; --s6: #008300; --s7: #9085E9; --s8: #E66767; --otros: #6B6A66;
-  }
-  * { box-sizing: border-box; }
-  html, body { margin: 0; background: var(--page); color: var(--ink); font: 14px/1.45 Inter, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; -webkit-font-smoothing: antialiased; }
-  .num { font-variant-numeric: tabular-nums; }
-  button, select { font: inherit; color: inherit; }
-  button { cursor: pointer; }
-  :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-  .app { max-width: 1240px; margin: 0 auto; padding: 18px 16px 40px; }
-
-  .top { display: flex; align-items: flex-end; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 14px; }
-  .top h1 { margin: 0; font-size: 22px; letter-spacing: -.02em; }
-  .top p { margin: 2px 0 0; color: var(--muted); font-size: 12px; }
-  nav.tabs { display: flex; gap: 4px; background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 4px; box-shadow: var(--shadow); }
-  nav.tabs button { border: 0; background: transparent; padding: 7px 14px; border-radius: 9px; font-weight: 600; font-size: 13px; color: var(--ink2); }
-  nav.tabs button[aria-selected="true"] { background: var(--accent-soft); color: var(--accent-ink); }
-
-  .filtros { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 10px 12px; margin-bottom: 16px; box-shadow: var(--shadow); position: sticky; top: 8px; z-index: 5; }
-  .grupo { display: flex; align-items: center; gap: 6px; }
-  .grupo > span { font-size: 11px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; }
-  .seg { display: inline-flex; background: var(--surface2); border: 1px solid var(--line); border-radius: 9px; padding: 2px; }
-  .seg button { border: 0; background: transparent; padding: 5px 10px; border-radius: 7px; font-size: 12px; font-weight: 600; color: var(--ink2); white-space: nowrap; }
-  .seg button[aria-pressed="true"] { background: var(--surface); color: var(--ink); box-shadow: 0 1px 2px rgba(0,0,0,.12); }
-  select { background: var(--surface2); border: 1px solid var(--line); border-radius: 8px; padding: 5px 8px; font-size: 12px; }
-  .sep { width: 1px; align-self: stretch; background: var(--line); }
-  label.check { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--ink2); cursor: pointer; }
-
-  .grid { display: grid; gap: 14px; }
-  .kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; margin-bottom: 14px; }
-  .kpi { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 13px 15px; box-shadow: var(--shadow); min-width: 0; }
-  .kpi .l { font-size: 12px; color: var(--ink2); font-weight: 500; display: flex; align-items: center; gap: 6px; }
-  .kpi .v { font-size: 24px; font-weight: 700; letter-spacing: -.02em; margin: 4px 0 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .kpi .d { font-size: 12px; color: var(--muted); }
-  .kpi.hero { border-color: transparent; background: linear-gradient(135deg, var(--accent-soft), var(--surface)); }
-  .delta { font-weight: 600; }
-  .delta.bien { color: var(--good-ink); } .delta.mal { color: var(--critical-ink); }
-  .badge { display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px; border-radius: 999px; font-size: 11px; font-weight: 700; }
-  .badge.bien { background: var(--good-soft); color: var(--good-ink); }
-  .badge.mal { background: var(--critical-soft); color: var(--critical-ink); }
-
-  .card { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 14px 16px 12px; box-shadow: var(--shadow); min-width: 0; }
-  .card h2 { font-size: 14px; margin: 0; letter-spacing: -.01em; }
-  .card .sub { font-size: 12px; color: var(--muted); margin: 2px 0 10px; }
-  .card header { display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; flex-wrap: wrap; }
-  .lienzo { position: relative; height: 290px; }
-  .lienzo.bajo { height: 220px; }
-  .dos { display: grid; grid-template-columns: 2fr 1fr; gap: 14px; }
-  .mitad { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
-  @media (max-width: 900px) { .dos, .mitad { grid-template-columns: 1fr; } }
-
-  .leyenda { display: flex; flex-wrap: wrap; gap: 6px 14px; margin: 4px 0 8px; font-size: 12px; color: var(--ink2); }
-  .leyenda span { display: inline-flex; align-items: center; gap: 6px; }
-  .leyenda i { width: 12px; height: 3px; border-radius: 2px; display: inline-block; }
-  .leyenda i.rect { height: 10px; width: 10px; border-radius: 3px; }
-
-  table { width: 100%; border-collapse: collapse; font-size: 13px; }
-  th { text-align: left; font-size: 11px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); font-weight: 700; padding: 8px 8px; border-bottom: 1px solid var(--line); white-space: nowrap; cursor: default; user-select: none; }
-  th.ord { cursor: pointer; }
-  th.ord:hover { color: var(--ink2); }
-  td { padding: 8px; border-bottom: 1px solid var(--grid); vertical-align: middle; }
-  td.n, th.n { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
-  tr.click { cursor: pointer; }
-  tr.click:hover td { background: var(--surface2); }
-  tr.sel td { background: var(--accent-soft); }
-  .barrita { height: 6px; border-radius: 3px; background: var(--s1); min-width: 2px; }
-  .punto { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 8px; vertical-align: -1px; }
-  .tabla-scroll { overflow-x: auto; }
-  .chips { display: flex; flex-wrap: wrap; gap: 6px; }
-  .chips button { border: 1px solid var(--line); background: var(--surface); border-radius: 999px; padding: 4px 10px; font-size: 12px; font-weight: 600; color: var(--ink2); display: inline-flex; align-items: center; gap: 6px; }
-  .chips button[aria-pressed="true"] { border-color: var(--accent); background: var(--accent-soft); color: var(--accent-ink); }
-  .chips button i { width: 8px; height: 8px; border-radius: 2px; display: inline-block; }
-  .lista { list-style: none; padding: 0; margin: 0; }
-  .lista li { display: flex; justify-content: space-between; gap: 10px; padding: 8px 0; border-bottom: 1px solid var(--grid); font-size: 13px; }
-  .lista li:last-child { border-bottom: 0; }
-  .lista .f { color: var(--muted); width: 76px; flex: none; white-space: nowrap; }
-  .lista .t { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .est { color: var(--muted); font-style: italic; }
-  .vacio { color: var(--muted); font-size: 13px; padding: 24px 0; text-align: center; }
-  .cargando { display: grid; place-items: center; height: 60vh; color: var(--muted); }
-  .nota { font-size: 12px; color: var(--muted); margin-top: 8px; }
-  [hidden] { display: none !important; }
-  .tt { position: fixed; pointer-events: none; background: var(--surface); color: var(--ink); border: 1px solid var(--line); border-radius: 10px; padding: 8px 10px; font-size: 12px; box-shadow: 0 8px 24px rgba(0,0,0,.14); z-index: 50; min-width: 160px; }
-  .tt .h { color: var(--muted); font-weight: 600; margin-bottom: 4px; }
-  .tt .r { display: flex; align-items: center; gap: 8px; justify-content: space-between; }
-  .tt .r span { display: inline-flex; align-items: center; gap: 6px; color: var(--ink2); }
-  .tt .r i { width: 10px; height: 2px; border-radius: 1px; display: inline-block; }
-  .tt .r b { font-variant-numeric: tabular-nums; }
+  #v-tablero .num { font-variant-numeric: tabular-nums; }
+  #v-tablero button, #v-tablero select { font: inherit; color: inherit; }
+  #v-tablero button { cursor: pointer; }
+  #v-tablero :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  #v-tablero .app { max-width: 1240px; margin: 0 auto; padding: 18px 16px 40px; }
+  #v-tablero .top { display: flex; align-items: flex-end; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 14px; }
+  #v-tablero .top h1 { margin: 0; font-size: 22px; letter-spacing: -.02em; }
+  #v-tablero .top p { margin: 2px 0 0; color: var(--muted); font-size: 12px; }
+  #v-tablero nav.tabs { display: flex; gap: 4px; background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 4px; box-shadow: var(--shadow); }
+  #v-tablero nav.tabs button { border: 0; background: transparent; padding: 7px 14px; border-radius: 9px; font-weight: 600; font-size: 13px; color: var(--ink2); }
+  #v-tablero nav.tabs button[aria-selected="true"] { background: var(--accent-soft); color: var(--accent-ink); }
+  #v-tablero .filtros { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 10px 12px; margin-bottom: 16px; box-shadow: var(--shadow); position: sticky; top: 8px; z-index: 5; }
+  #v-tablero .grupo { display: flex; align-items: center; gap: 6px; }
+  #v-tablero .grupo > span { font-size: 11px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; }
+  #v-tablero .seg { display: inline-flex; background: var(--surface2); border: 1px solid var(--line); border-radius: 9px; padding: 2px; }
+  #v-tablero .seg button { border: 0; background: transparent; padding: 5px 10px; border-radius: 7px; font-size: 12px; font-weight: 600; color: var(--ink2); white-space: nowrap; }
+  #v-tablero .seg button[aria-pressed="true"] { background: var(--surface); color: var(--ink); box-shadow: 0 1px 2px rgba(0,0,0,.12); }
+  #v-tablero select { background: var(--surface2); border: 1px solid var(--line); border-radius: 8px; padding: 5px 8px; font-size: 12px; }
+  #v-tablero .sep { width: 1px; align-self: stretch; background: var(--line); }
+  #v-tablero label.check { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--ink2); cursor: pointer; }
+  #v-tablero .grid { display: grid; gap: 14px; }
+  #v-tablero .kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; margin-bottom: 14px; }
+  #v-tablero .kpi { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 13px 15px; box-shadow: var(--shadow); min-width: 0; }
+  #v-tablero .kpi .l { font-size: 12px; color: var(--ink2); font-weight: 500; display: flex; align-items: center; gap: 6px; }
+  #v-tablero .kpi .v { font-size: 24px; font-weight: 700; letter-spacing: -.02em; margin: 4px 0 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  #v-tablero .kpi .d { font-size: 12px; color: var(--muted); }
+  #v-tablero .kpi.hero { border-color: transparent; background: linear-gradient(135deg, var(--accent-soft), var(--surface)); }
+  #v-tablero .delta { font-weight: 600; }
+  #v-tablero .delta.bien { color: var(--good-ink); }
+  #v-tablero .delta.mal { color: var(--critical-ink); }
+  #v-tablero .badge { display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px; border-radius: 999px; font-size: 11px; font-weight: 700; }
+  #v-tablero .badge.bien { background: var(--good-soft); color: var(--good-ink); }
+  #v-tablero .badge.mal { background: var(--critical-soft); color: var(--critical-ink); }
+  #v-tablero .card { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 14px 16px 12px; box-shadow: var(--shadow); min-width: 0; }
+  #v-tablero .card h2 { font-size: 14px; margin: 0; letter-spacing: -.01em; }
+  #v-tablero .card .sub { font-size: 12px; color: var(--muted); margin: 2px 0 10px; }
+  #v-tablero .card header { display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; flex-wrap: wrap; }
+  #v-tablero .lienzo { position: relative; height: 290px; }
+  #v-tablero .lienzo.bajo { height: 220px; }
+  #v-tablero .dos { display: grid; grid-template-columns: 2fr 1fr; gap: 14px; }
+  #v-tablero .mitad { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+  @media (max-width: 900px) { #v-tablero .dos, #v-tablero .mitad { grid-template-columns: 1fr; } }
+  #v-tablero .leyenda { display: flex; flex-wrap: wrap; gap: 6px 14px; margin: 4px 0 8px; font-size: 12px; color: var(--ink2); }
+  #v-tablero .leyenda span { display: inline-flex; align-items: center; gap: 6px; }
+  #v-tablero .leyenda i { width: 12px; height: 3px; border-radius: 2px; display: inline-block; }
+  #v-tablero .leyenda i.rect { height: 10px; width: 10px; border-radius: 3px; }
+  #v-tablero table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  #v-tablero th { text-align: left; font-size: 11px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); font-weight: 700; padding: 8px 8px; border-bottom: 1px solid var(--line); white-space: nowrap; cursor: default; user-select: none; }
+  #v-tablero th.ord { cursor: pointer; }
+  #v-tablero th.ord:hover { color: var(--ink2); }
+  #v-tablero td { padding: 8px; border-bottom: 1px solid var(--grid); vertical-align: middle; }
+  #v-tablero td.n, #v-tablero th.n { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  #v-tablero tr.click { cursor: pointer; }
+  #v-tablero tr.click:hover td { background: var(--surface2); }
+  #v-tablero tr.sel td { background: var(--accent-soft); }
+  #v-tablero .barrita { height: 6px; border-radius: 3px; background: var(--s1); min-width: 2px; }
+  #v-tablero .punto { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 8px; vertical-align: -1px; }
+  #v-tablero .tabla-scroll { overflow-x: auto; }
+  #v-tablero .chips { display: flex; flex-wrap: wrap; gap: 6px; }
+  #v-tablero .chips button { border: 1px solid var(--line); background: var(--surface); border-radius: 999px; padding: 4px 10px; font-size: 12px; font-weight: 600; color: var(--ink2); display: inline-flex; align-items: center; gap: 6px; }
+  #v-tablero .chips button[aria-pressed="true"] { border-color: var(--accent); background: var(--accent-soft); color: var(--accent-ink); }
+  #v-tablero .chips button i { width: 8px; height: 8px; border-radius: 2px; display: inline-block; }
+  #v-tablero .lista { list-style: none; padding: 0; margin: 0; }
+  #v-tablero .lista li { display: flex; justify-content: space-between; gap: 10px; padding: 8px 0; border-bottom: 1px solid var(--grid); font-size: 13px; }
+  #v-tablero .lista li:last-child { border-bottom: 0; }
+  #v-tablero .lista .f { color: var(--muted); width: 76px; flex: none; white-space: nowrap; }
+  #v-tablero .lista .t { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  #v-tablero .est { color: var(--muted); font-style: italic; }
+  #v-tablero .vacio { color: var(--muted); font-size: 13px; padding: 24px 0; text-align: center; }
+  #v-tablero .cargando { display: grid; place-items: center; height: 60vh; color: var(--muted); }
+  #v-tablero .nota { font-size: 12px; color: var(--muted); margin-top: 8px; }
+  #v-tablero [hidden] { display: none !important; }
+  #v-tablero .tt { position: fixed; pointer-events: none; background: var(--surface); color: var(--ink); border: 1px solid var(--line); border-radius: 10px; padding: 8px 10px; font-size: 12px; box-shadow: 0 8px 24px rgba(0,0,0,.14); z-index: 50; min-width: 160px; }
+  #v-tablero .tt .h { color: var(--muted); font-weight: 600; margin-bottom: 4px; }
+  #v-tablero .tt .r { display: flex; align-items: center; gap: 8px; justify-content: space-between; }
+  #v-tablero .tt .r span { display: inline-flex; align-items: center; gap: 6px; color: var(--ink2); }
+  #v-tablero .tt .r i { width: 10px; height: 2px; border-radius: 1px; display: inline-block; }
+  #v-tablero .tt .r b { font-variant-numeric: tabular-nums; }
 </style>
-</head>
-<body>
+<section id="v-tablero" class="vista scroll" hidden>
 <div class="app">
   <div class="top">
     <div>
-      <h1>Tus finanzas</h1>
-      <p id="subtitulo">Cargando…</p>
+      <h1>Dashboard</h1>
+      <p id="tbSub">Cargando…</p>
     </div>
-    <nav class="tabs" role="tablist" id="tabs">
+    <nav class="tabs" role="tablist" id="tbTabs">
       <button role="tab" data-v="resumen" aria-selected="true">Resumen</button>
       <button role="tab" data-v="gastos" aria-selected="false">Gastos</button>
       <button role="tab" data-v="salario" aria-selected="false">Salario</button>
@@ -138,7 +93,7 @@
     </nav>
   </div>
 
-  <div class="filtros" id="filtros" hidden>
+  <div class="filtros" id="tbFiltros" hidden>
     <div class="grupo"><span>Período</span>
       <div class="seg" id="presets">
         <button data-p="6" aria-pressed="false">6M</button>
@@ -147,7 +102,7 @@
         <button data-p="24" aria-pressed="false">24M</button>
         <button data-p="todo" aria-pressed="false">Todo</button>
       </div>
-      <select id="desde" aria-label="Desde"></select><span style="text-transform:none;letter-spacing:0">→</span><select id="hasta" aria-label="Hasta"></select>
+      <select id="tbDesde" aria-label="Desde"></select><span style="text-transform:none;letter-spacing:0">→</span><select id="tbHasta" aria-label="Hasta"></select>
     </div>
     <div class="sep"></div>
     <div class="grupo"><span>Ver en</span>
@@ -158,13 +113,13 @@
       </div>
     </div>
     <div class="sep"></div>
-    <label class="check"><input type="checkbox" id="estimados"> Incluir meses estimados</label>
+    <label class="check"><input type="checkbox" id="tbEst"> Incluir meses estimados</label>
   </div>
 
-  <div id="cargando" class="cargando">Cargando tus datos…</div>
+  <div id="tbCargando" class="cargando">Cargando tus datos…</div>
 
   <!-- RESUMEN -->
-  <section id="v-resumen" hidden>
+  <section id="tb-resumen" hidden>
     <div class="kpis" id="kpisResumen"></div>
     <div class="dos">
       <div class="card">
@@ -184,7 +139,7 @@
   </section>
 
   <!-- GASTOS -->
-  <section id="v-gastos" hidden>
+  <section id="tb-gastos" hidden>
     <div class="kpis" id="kpisGastos"></div>
     <div class="card">
       <header>
@@ -209,7 +164,7 @@
   </section>
 
   <!-- SALARIO -->
-  <section id="v-salario" hidden>
+  <section id="tb-salario" hidden>
     <div class="card" style="margin-bottom:14px;padding:10px 14px">
       <div class="grupo" style="flex-wrap:wrap"><span>Ingresos a analizar</span><div class="chips" id="chipsIng"></div></div>
     </div>
@@ -239,7 +194,7 @@
   </section>
 
   <!-- PRECIOS -->
-  <section id="v-precios" hidden>
+  <section id="tb-precios" hidden>
     <div class="kpis" id="kpisPre"></div>
     <div class="card">
       <header><div><h2>¿Qué aumentó más que la inflación?</h2><div class="sub" id="subPre"></div></div></header>
@@ -252,89 +207,11 @@
     </div>
   </section>
 </div>
+</section>
 <div class="tt" id="tt" hidden></div>
-
 <script>
-// <calc>
-/* Cálculos puros del dashboard (testeables en Node). */
-var MESES_D = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
-
-function etiquetaCorta(iso) { var p = iso.split('-'); return MESES_D[Number(p[1]) - 1] + ' ' + p[0].slice(2); }
-
-function sumarMeses(iso, k) {
-  var p = iso.split('-'), d = new Date(Number(p[0]), Number(p[1]) - 1 + k, 1);
-  return d.getFullYear() + '-' + ('0' + (d.getMonth() + 1)).slice(-2);
-}
-
-/** Índice de precios acumulado por mes (primer mes = 100). Completa con la inflación esperada. */
-function indicePrecios(meses, inflacion, esperada) {
-  var idx = {}, nivel = 100, faltantes = [];
-  meses.forEach(function (m, i) {
-    if (i > 0) {
-      var p = inflacion[m];
-      if (p === undefined || p === null || p === '') { p = esperada; faltantes.push(m); }
-      nivel = nivel * (1 + Number(p) / 100);
-    }
-    idx[m] = nivel;
-  });
-  return { idx: idx, estimados: faltantes };
-}
-
-/** Cotización para cada mes (si falta, la última conocida). */
-function cotizaciones(meses, mapa) {
-  var out = {}, ult = null;
-  var claves = Object.keys(mapa || {}).sort();
-  meses.forEach(function (m) {
-    if (mapa[m]) ult = mapa[m];
-    else if (ult === null) { var ant = claves.filter(function (k) { return k <= m; }).pop(); ult = ant ? mapa[ant] : (claves.length ? mapa[claves[0]] : null); }
-    out[m] = ult;
-  });
-  return out;
-}
-
-/** Convierte un valor según la moneda elegida. */
-function convertir(v, mes, modo, ctx) {
-  if (v === null || v === undefined) return null;
-  if (modo === 'real') return v * ctx.idx[ctx.ref] / ctx.idx[mes];
-  if (modo === 'usd') return ctx.usd[mes] ? v / ctx.usd[mes] : null;
-  return v;
-}
-
-/** Suma por mes de un conjunto de ítems. */
-function serieSuma(items, iMeses, incluirEst) {
-  return iMeses.map(function (i) {
-    var s = 0, hay = false;
-    items.forEach(function (it) {
-      var v = it.v[i];
-      if (v === null || v === undefined || (!incluirEst && it.e[i])) return;
-      s += v; hay = true;
-    });
-    return hay ? s : null;
-  });
-}
-
-/** Variación porcentual entre el primer y el último valor no nulo y positivo. */
-function variacion(serie) {
-  var a = null, b = null, ia = -1, ib = -1;
-  serie.forEach(function (v, i) { if (v) { if (a === null) { a = v; ia = i; } b = v; ib = i; } });
-  return a && b && ib > ia ? { pct: (b / a - 1) * 100, desde: ia, hasta: ib, a: a, b: b } : null;
-}
-
-/** Tabla de precios: aumento de cada gasto fijo contra la inflación del mismo período. */
-function tablaPrecios(items, meses, iMeses, idx, incluirEst) {
-  return items.map(function (it) {
-    var serie = iMeses.map(function (i) { return !incluirEst && it.e[i] ? null : it.v[i]; });
-    var va = variacion(serie);
-    if (!va) return null;
-    var mA = meses[iMeses[va.desde]], mB = meses[iMeses[va.hasta]];
-    var infl = (idx[mB] / idx[mA] - 1) * 100;
-    var real = ((1 + va.pct / 100) / (1 + infl / 100) - 1) * 100;
-    return { nombre: it.nombre, categoria: it.categoria, desde: mA, hasta: mB, a: va.a, b: va.b, pct: va.pct, infl: infl, real: real };
-  }).filter(Boolean);
-}
-// </calc>
-
-var MODO = '<?= modo ?>';
+/* Finanzas · Dashboard (usa las funciones de cálculo de Nucleo) */
+var Tablero = (function () {
 var D = null, charts = {};
 var estado = { vista: 'resumen', desde: null, hasta: null, moneda: 'nominal', estimados: true, agrupar: 'categoria', catsOff: {}, catSel: null, ingresos: null, precios: null, ordPre: { k: 'real', dir: -1 } };
 var $ = function (id) { return document.getElementById(id); };
@@ -360,15 +237,6 @@ function pct(n, signo) {
 }
 function el(tag, cls, txt) { var e = document.createElement(tag); if (cls) e.className = cls; if (txt !== undefined) e.textContent = txt; return e; }
 
-/* ---------- Carga ---------- */
-function cargar() {
-  if (window.google && google.script && google.script.run) {
-    google.script.run.withSuccessHandler(iniciar).withFailureHandler(function (e) { $('cargando').textContent = 'No pude leer la planilla: ' + (e.message || e); }).dashboardDatos();
-  } else if (window.MOCK) {
-    setTimeout(function () { iniciar(window.MOCK.dashboardDatos()); }, 50);
-  }
-}
-
 function iniciar(d) {
   D = d;
   D.iActual = D.meses.indexOf(D.mesActual);
@@ -376,7 +244,7 @@ function iniciar(d) {
   // Último mes con datos reales para el rango por defecto
   estado.hasta = hasta;
   estado.desde = Math.max(0, hasta - 11);
-  var sd = $('desde'), sh = $('hasta');
+  var sd = $('tbDesde'), sh = $('tbHasta');
   D.meses.forEach(function (m, i) {
     var o1 = el('option', '', etiquetaCorta(m)); o1.value = i; sd.appendChild(o1);
     var o2 = el('option', '', etiquetaCorta(m)); o2.value = i; sh.appendChild(o2);
@@ -388,21 +256,21 @@ function iniciar(d) {
   var principal = salario.filter(function (i) { return /salario|sueldo/i.test(i.nombre); })[0] || salario[0];
   estado.ingresos = {};
   if (principal) estado.ingresos[principal.nombre] = true;
-  $('subtitulo').textContent = 'Datos al ' + D.generado.split('-').reverse().join('/') + ' · ' + (D.dolar === 'oficial' ? 'dólar oficial' : 'dólar blue') + ' · inflación INDEC';
-  $('cargando').hidden = true;
-  $('filtros').hidden = false;
-  try { var v = localStorage.getItem('fz-vista'); if (v && $('v-' + v)) estado.vista = v; } catch (e) { /* sin storage */ }
+  $('tbSub').textContent = 'Datos al ' + D.generado.split('-').reverse().join('/') + ' · ' + (D.dolar === 'oficial' ? 'dólar oficial' : 'dólar blue') + ' · inflación INDEC';
+  $('tbCargando').hidden = true;
+  $('tbFiltros').hidden = false;
+  try { var v = localStorage.getItem('fz-vista'); if (v && $('tb-' + v)) estado.vista = v; } catch (e) { /* sin storage */ }
   sincronizarControles();
   render();
 }
 
 function sincronizarControles() {
-  $('desde').value = estado.desde; $('hasta').value = estado.hasta;
-  document.querySelectorAll('#tabs button').forEach(function (b) { b.setAttribute('aria-selected', String(b.dataset.v === estado.vista)); });
+  $('tbDesde').value = estado.desde; $('tbHasta').value = estado.hasta;
+  document.querySelectorAll('#tbTabs button').forEach(function (b) { b.setAttribute('aria-selected', String(b.dataset.v === estado.vista)); });
   document.querySelectorAll('#moneda button').forEach(function (b) { b.setAttribute('aria-pressed', String(b.dataset.m === estado.moneda)); });
   document.querySelectorAll('#agrupar button').forEach(function (b) { b.setAttribute('aria-pressed', String(b.dataset.a === estado.agrupar)); });
-  ['resumen', 'gastos', 'salario', 'precios'].forEach(function (v) { $('v-' + v).hidden = v !== estado.vista; });
-  $('estimados').checked = estado.estimados;
+  ['resumen', 'gastos', 'salario', 'precios'].forEach(function (v) { $('tb-' + v).hidden = v !== estado.vista; });
+  $('tbEst').checked = estado.estimados;
 }
 
 /** Contexto del período elegido. */
@@ -544,14 +412,14 @@ function badgeTasa(t) {
 /* ---------- Vista: Gastos ---------- */
 var PALETA_CAT = null;
 function coloresCategoria() {
-  if (PALETA_CAT) return PALETA_CAT;
+  if (PALETA_CAT && PALETA_CAT._D === D) return PALETA_CAT;
   // Orden estable: por gasto total histórico (no por el filtro) → el color sigue a la categoría.
   var tot = {};
   D.items.filter(function (i) { return i.clase === 'G'; }).forEach(function (i) {
     tot[i.categoria] = (tot[i.categoria] || 0) + i.v.reduce(function (a, v) { return a + (v || 0); }, 0);
   });
   var orden = Object.keys(tot).sort(function (a, b) { return tot[b] - tot[a]; });
-  PALETA_CAT = {};
+  PALETA_CAT = { _D: D };
   orden.forEach(function (c, k) { PALETA_CAT[c] = k < 7 ? SERIES[k] : '--otros'; });
   return PALETA_CAT;
 }
@@ -803,7 +671,7 @@ function renderPrecios(P) {
 }
 
 /* ---------- Eventos ---------- */
-document.querySelectorAll('#tabs button').forEach(function (b) {
+document.querySelectorAll('#tbTabs button').forEach(function (b) {
   b.onclick = function () { estado.vista = b.dataset.v; try { localStorage.setItem('fz-vista', estado.vista); } catch (e) { /* ok */ } sincronizarControles(); render(); };
 });
 document.querySelectorAll('#presets button').forEach(function (b) {
@@ -816,17 +684,31 @@ document.querySelectorAll('#presets button').forEach(function (b) {
     sincronizarControles(); render();
   };
 });
-$('desde').onchange = function () { estado.desde = Number(this.value); document.querySelectorAll('#presets button').forEach(function (x) { x.setAttribute('aria-pressed', 'false'); }); render(); };
-$('hasta').onchange = function () { estado.hasta = Number(this.value); document.querySelectorAll('#presets button').forEach(function (x) { x.setAttribute('aria-pressed', 'false'); }); render(); };
+$('tbDesde').onchange = function () { estado.desde = Number(this.value); document.querySelectorAll('#presets button').forEach(function (x) { x.setAttribute('aria-pressed', 'false'); }); render(); };
+$('tbHasta').onchange = function () { estado.hasta = Number(this.value); document.querySelectorAll('#presets button').forEach(function (x) { x.setAttribute('aria-pressed', 'false'); }); render(); };
 document.querySelectorAll('#moneda button').forEach(function (b) {
   b.onclick = function () { estado.moneda = b.dataset.m; sincronizarControles(); render(); };
 });
 document.querySelectorAll('#agrupar button').forEach(function (b) {
   b.onclick = function () { estado.agrupar = b.dataset.a; estado.catsOff = {}; estado.catSel = null; sincronizarControles(); render(); };
 });
-$('estimados').onchange = function () { estado.estimados = this.checked; render(); };
+$('tbEst').onchange = function () { estado.estimados = this.checked; render(); };
 window.addEventListener('scroll', function () { $('tt').hidden = true; }, { passive: true });
-cargar();
+
+  var iniciado = false;
+  /** Dibuja (o actualiza) el tablero con los datos del modelo. */
+  function mostrar(d) {
+    if (!iniciado) { iniciado = true; iniciar(d); return; }
+    var vista = estado.vista, desde = estado.desde, hasta = estado.hasta;
+    D = d;
+    D.iActual = D.meses.indexOf(D.mesActual);
+    var inds = indicePrecios(D.meses, D.inflacion, D.inflEsperada);
+    D.idx = inds.idx; D.idxEstimados = inds.estimados;
+    D.usd = cotizaciones(D.meses, D.dolar === 'oficial' ? D.oficial : D.blue);
+    estado.vista = vista; estado.desde = Math.min(desde, D.meses.length - 1); estado.hasta = Math.min(hasta, D.meses.length - 1);
+    sincronizarControles();
+    render();
+  }
+  return { mostrar: mostrar };
+})();
 </script>
-</body>
-</html>

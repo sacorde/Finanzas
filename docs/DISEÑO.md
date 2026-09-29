@@ -1,36 +1,35 @@
 # Decisiones de diseño
 
-## El problema del primer intento
+## Evolución
 
-El sistema anterior terminó siendo *más difícil de manipular que el Excel*. La causa típica: esconder la planilla detrás de formularios, tablas "normalizadas" y pantallas propias. Cada cambio chico (una cuenta, mover una fila, corregir un mes viejo) pasaba a necesitar una pantalla.
+1. **Primer intento (otro repo):** terminó siendo más difícil de manipular que el Excel.
+2. **Versión 2:** la hoja de Google Sheets como interfaz, con scripts que agregaban automatizaciones. Funcionaba, pero la planilla mezclaba datos, formato y lógica, y quedaba atada a lo que Sheets deja hacer.
+3. **Versión 3 (actual):** una **app web** que se usa como un Excel y una planilla que es **solo base de datos**.
 
-## Principio rector: la planilla es la interfaz
+## Principios
 
-1. **La hoja Finanzas es la fuente de verdad y se edita como un Excel.** Nada de bases de datos paralelas: el script lee y escribe la misma grilla que ves.
-2. **El script solo agrega lo que Excel no hace solo** (proyectar, fechas hábiles, calendario, inflación) y **nunca pisa algo que escribiste vos**.
-3. **Estado visible, no escondido.** Estimado vs. confirmado es un estilo de celda (gris itálica vs. negro), no una columna o una base aparte. Se entiende mirando.
-4. **Una sola configuración por cosa, en el lugar donde se usa.** El vencimiento, el medio de pago y la forma de proyectar están en la misma fila del concepto. La hoja Config tiene solo preferencias generales.
-5. **Tolerante a lo que haga el usuario.** Insertar/borrar filas, copiar una categoría, pisar un subtotal: el sistema se reacomoda (códigos en una columna oculta, fórmulas regeneradas, menú Reparar).
-6. **Las pantallas nuevas son atajos, no obligaciones.** El panel de carga y el dashboard aceleran lo frecuente (cargar un gasto desde el celular, analizar) pero todo se puede hacer escribiendo en la hoja.
+1. **Se edita como un Excel.** Grilla con teclado (flechas, Enter, Tab, Supr), cuentas en las celdas, copiar y pegar, deshacer, suma de la selección. Las pantallas nuevas (carga rápida, paneles) son atajos, no obligaciones.
+2. **El sistema nunca pisa lo que cargaste vos.** El estado *confirmado* / *estimado* es explícito (columna `estado`) y se ve en la celda (negro / gris itálica).
+3. **Datos simples y legibles.** Una tabla por entidad, una fila por registro, texto plano para meses y fechas (`2026-09`, `2026-09-28`), para que Sheets no los convierta.
+4. **Una sola configuración por cosa, en el lugar donde se usa.** Vencimiento, medio de pago y proyección están en el concepto. Ajustes solo tiene preferencias generales.
+5. **Nada destructivo sin respaldo.** La instalación y la limpieza de hojas hacen una copia completa del archivo antes de tocar nada.
+6. **Instantáneo en pantalla, seguro en el servidor.** La celda cambia al instante. El guardado va en cola, en lotes y con lock. El servidor recalcula la proyección y devuelve el resultado.
 
 ## Por qué así
 
 | Decisión | Alternativa descartada | Motivo |
 |---|---|---|
-| Meses en columnas, conceptos en filas (como el Excel original) | Tabla larga fecha/concepto/monto | Es el modelo mental de quien ya usa la planilla; se ve un año de un vistazo |
-| Totales anuales intercalados + grupos de columnas | Totales solo en el dashboard | Al plegar un año queda visible su total: el pasado ocupa una columna |
-| Códigos de estructura en columna A oculta | Detectar secciones por formato o texto | Robusto a renombrar, mover e insertar filas |
-| Subtotales con `SUM(rango)` regenerados por script | `SUMIFS` por categoría | Evita referencias circulares y se leen fácil en la barra de fórmulas |
-| Eventuales en una hoja de movimientos | Una fila por gasto dentro de Finanzas (Excel viejo) | La hoja principal no crece sin fin, y permite cuotas y categorías |
-| Reglas de vencimiento en castellano | Fórmulas `WORKDAY(...)` o un selector de fechas | Se escriben en 2 segundos y se leen igual |
-| Solo repetir desde el mes actual; "mes anterior vacío = dado de baja" | Proyectar todo desde el último valor | Evita revivir suscripciones canceladas |
-| Importación: futuro que repite = estimado; futuro distinto = tuyo | Todo el futuro importado como estimado | Respeta lo que planificaste a mano (ej. aguinaldo) |
-| Filtros del dashboard en el navegador | Recalcular en el servidor | Respuesta instantánea al cambiar período o moneda |
+| App web de Apps Script (HtmlService) | Sitio externo + API de Sheets | No hay servidores ni claves: corre con tu cuenta y tus permisos |
+| Tabla `Valores` larga (concepto × mes) | Grilla de meses en la hoja | Sin límites de columnas ni fórmulas frágiles, y fácil de leer desde cualquier herramienta |
+| Proyección calculada en el servidor | Fórmulas en Sheets | Reglas claras (repetir, promedio, inflación, baja con 0) y testeables |
+| Cuotas guardadas como un movimiento con `cuotas` y `mes` | Una fila por cuota | Se edita en un solo lugar; el reparto se calcula |
+| Deploy a la implementación de prueba (`/dev`) | Crear una versión por deploy | Siempre el último código, sin acumular versiones; la app es privada (solo el dueño) |
+| Filtros y dashboard en el navegador | Recalcular en el servidor | Respuesta instantánea |
 
 ## Próximos pasos posibles
 
-- Hojas **Reservas** (tenencias, deudas de terceros) y **Pagos**: integrarlas al dashboard (patrimonio neto, deudas).
-- Importar **Finanzas 2022 / 2023** a la línea de tiempo para ver la serie completa del salario.
-- Ajustes de alquiler por **ICL / IPC cada N meses** como modo de proyección.
-- Resumen de tarjeta: importar el PDF/CSV del resumen a Movimientos.
+- Importar *Finanzas 2022 / 2023* para ver la serie completa del salario.
+- Tenencias y deudas (la vieja hoja *Reservas*): patrimonio neto en el dashboard.
+- Ajustes de alquiler por ICL / IPC cada N meses como modo de proyección.
+- Importar el resumen de la tarjeta (PDF/CSV) a Movimientos.
 - Alertas: "este mes gastaste X % más en Salidas que tu promedio".

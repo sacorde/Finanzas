@@ -1,182 +1,214 @@
-// Prueba de punta a punta: instala sobre una planilla vieja simulada y usa el sistema.
+// Pruebas de punta a punta con un simulador de Google Sheets:
+// instalación desde el Excel original y desde la versión 2, uso de la API y limpieza de hojas.
 const test = require('node:test');
 const assert = require('node:assert');
 const { cargar } = require('./harness');
 const { crearEntorno } = require('./mock-sheets');
 
-const G = cargar({ hoy: new Date(2026, 8, 28, 10, 0) }); // 28/09/2026
-const env = crearEntorno(G);
-const D = G.Date;
-
+const HOY = new Date(2026, 8, 28, 10, 0); // 28/09/2026
 const MESES = ['ENERO', 'FEBRERO', 'MARZO', 'ABRIL', 'MAYO', 'JUNIO', 'JULIO', 'AGOSTO', 'SEPTIEMBRE', 'OCTUBRE', 'NOVIEMBRE', 'DICIEMBRE'];
 const ANTEULTIMO = '=WORKDAY(EOMONTH(TODAY(),0)+1,-2)';
 const PRIMER_HABIL = '=WORKDAY(IF(DAY(TODAY())<=1, DATE(YEAR(TODAY()), MONTH(TODAY()), 1), DATE(YEAR(TODAY()), MONTH(TODAY())+1, 1))-1, 1)';
 const doce = (f) => Array.from({ length: 12 }, (_, i) => f(i));
+const plano = (x) => JSON.parse(JSON.stringify(x));
 
-function planillaVieja() {
+function planillaVieja(env) {
   const sh = env.ss.insertSheet('Finanzas');
   sh.insertColumnsAfter(26, 10);
   const vacio = () => Array(28).fill('');
-  const filas = [];
   const f1 = vacio(); f1[0] = 'FINANZAS'; MESES.forEach((m, i) => { f1[2 + i] = m; f1[15 + i] = m; }); f1[14] = 2026; f1[27] = 2027;
-  filas.push(f1);
-  const f2 = vacio(); f2[14] = 'TOTAL AÑO'; f2[27] = 'TOTAL AÑO'; filas.push(f2);
+  const f2 = vacio(); f2[14] = 'TOTAL AÑO'; f2[27] = 'TOTAL AÑO';
   const fila = (a, b, v26, v27) => { const f = vacio(); f[0] = a; f[1] = b; doce((i) => { f[2 + i] = v26 ? v26(i) : ''; f[15 + i] = v27 ? v27(i) : ''; }); return f; };
-  filas.push(fila('INGRESOS', ''));
-  filas.push(fila('', ''));
-  filas.push(fila(ANTEULTIMO, 'Salario', (i) => 1000000 + i * 50000, (i) => (i < 3 ? 1550000 : '')));
-  filas.push(fila('Otros Ingresos', '', (i) => (i === 5 ? 500000 : '')));
-  filas.push(fila('', ''));
-  filas.push(fila('Total Ingresos', '', (i) => '=SUM(C5:C6)'));
-  filas.push(fila('GASTOS FIJOS', ''));
-  filas.push(fila('Suscripciones', ''));
-  filas.push(fila('DA', 'Netflix', (i) => (i < 4 ? 12000 : '')));
-  filas.push(fila('Servicios', ''));
-  filas.push(fila(PRIMER_HABIL, 'Luz', (i) => (i === 3 ? '=100+50' : i <= 8 ? 100 + i : ''), () => ''));
-  filas.push(fila('PRESTAMOS/INVERSIONES', ''));
-  filas.push(fila(PRIMER_HABIL, 'Ahorro del Mes', (i) => (i <= 8 ? '=C5*20%' : '')));
-  filas.push(fila('', 'Prestamo Banco', (i) => (i < 12 ? 50000 : '')));
-  filas.push(fila('EVENTUALES', ''));
-  filas.push(fila('', 'Heladera', (i) => (i === 2 ? 900000 : '')));
-  filas.push(fila('', 'Vuelo a Bariloche', (i) => (i === 6 ? '=200000+150000' : '')));
-  filas.push(fila('Total Eventuales', ''));
+  const filas = [f1, f2,
+    fila('INGRESOS', ''), fila('', ''),
+    fila(ANTEULTIMO, 'Salario', (i) => 1000000 + i * 50000, (i) => (i < 3 ? 1550000 : '')),
+    fila('Otros Ingresos', '', (i) => (i === 5 ? 500000 : '')), fila('', ''), fila('Total Ingresos', '', () => '=SUM(C5:C6)'),
+    fila('GASTOS FIJOS', ''), fila('Suscripciones', ''), fila('DA', 'Netflix', (i) => (i < 4 ? 12000 : '')),
+    fila('Servicios', ''), fila(PRIMER_HABIL, 'Luz', (i) => (i === 3 ? '=100+50' : i <= 8 ? 100 + i : '')),
+    fila('PRESTAMOS/INVERSIONES', ''), fila(PRIMER_HABIL, 'Ahorro del Mes', (i) => (i <= 8 ? '=C5*20%' : '')), fila('', 'Prestamo Banco', () => 50000),
+    fila('EVENTUALES', ''), fila('', 'Heladera', (i) => (i === 2 ? 900000 : '')), fila('', 'Vuelo a Bariloche', (i) => (i === 6 ? '=200000+150000' : '')),
+    fila('Total Eventuales', '')];
   sh.getRange(1, 1, filas.length, 28).setValues(filas);
-  return sh;
+  env.ss.insertSheet('Reservas').getRange(1, 1).setValue('TENENCIA');
+  env.ss.insertSheet('Pagos').getRange(1, 1).setValue('x');
 }
 
-planillaVieja();
-const res = G.instalarSistema_(true);
-const sh = env.ss.getSheetByName('Finanzas');
-const est = () => G.leerEstructura(sh);
-const E = est();
-const item = (n) => est().items.find((i) => i.nombre === n);
-const col = (y, m) => E.meses.find((x) => x.iso === `${y}-${String(m).padStart(2, '0')}`).col;
-const celda = (n, y, m) => sh.getRange(item(n).fila, col(y, m));
+function instalar(G) {
+  const res = {};
+  for (const paso of ['respaldo', 'migrar', 'indices', 'automatizaciones', 'calendario']) res[paso] = plano(G.api_instalar(paso));
+  return res;
+}
 
-test('instala hojas y conserva la original', () => {
-  const nombres = env.ss.getSheets().map((s) => s.getName());
-  for (const n of ['Finanzas', 'Movimientos', 'Config', 'Índices', 'Finanzas (original)']) assert.ok(nombres.includes(n), n);
-  assert.strictEqual(res.origen, 'importado');
-  assert.strictEqual(sh.getRange(3, 1).getValue(), 'RES:I');
+/* ---------- Escenario 1: Excel original ---------- */
+const G = cargar({ hoy: HOY });
+const env = crearEntorno(G);
+planillaVieja(env);
+const estadoAntes = plano(G.api_estado());
+const pasos = instalar(G);
+const concepto = (n) => G.api_datos().conceptos.find((c) => c.nombre === n);
+const valor = (d, cid, mes) => d.valores.find((v) => v[0] === cid && v[1] === mes);
+
+test('detecta el Excel original y lo instala', () => {
+  assert.strictEqual(estadoAntes.instalado, false);
+  assert.strictEqual(estadoAntes.fuente.tipo, 'legado');
+  for (const p of Object.keys(pasos)) assert.ok(pasos[p].ok !== false || p === 'calendario', p + ': ' + pasos[p].detalle);
+  assert.strictEqual(env.ss._copias.length, 1, 'hace una copia de respaldo');
+  assert.strictEqual(G.api_estado().instalado, true);
+  for (const t of ['Conceptos', 'Valores', 'Movimientos', 'Indices', 'Feriados', 'Config']) assert.ok(env.ss.getSheetByName(t), t);
 });
 
-test('línea de tiempo con meses y totales anuales', () => {
-  assert.strictEqual(E.meses[0].iso, '2026-01');
-  assert.strictEqual(E.meses.length, 24);
-  assert.strictEqual(E.totales.map((t) => t.anio).join(), '2026,2027');
-  assert.strictEqual(E.totales[0].col, E.meses[11].col + 1);
+test('conceptos con sección, categoría, vencimiento y medio', () => {
+  const d = G.api_datos();
+  const salario = d.conceptos.find((c) => c.nombre === 'Salario');
+  assert.strictEqual(salario.seccion, 'Ingresos');
+  assert.strictEqual(salario.vence, 'anteúltimo hábil');
+  const luz = d.conceptos.find((c) => c.nombre === 'Luz');
+  assert.strictEqual(luz.categoria, 'Servicios');
+  assert.strictEqual(d.conceptos.find((c) => c.nombre === 'Netflix').medio, 'Débito automático');
+  assert.strictEqual(d.conceptos.find((c) => c.nombre === 'Ahorro del Mes').clase, 'A');
+  assert.strictEqual(d.conceptos.find((c) => c.nombre === 'Otros Ingresos').proyeccion, 'No proyectar');
+  assert.ok(d.conceptos.some((c) => c.tipo === 'eventual' && c.nombre === 'Viajes'));
+  assert.ok(d.venc[luz.id]['2026-10'], 'vencimiento calculado');
 });
 
-test('estructura: secciones, categorías, reglas y medios', () => {
-  assert.strictEqual(E.secciones.map((s) => s.nombre.toUpperCase()).join(), 'INGRESOS,GASTOS FIJOS,PRÉSTAMOS Y DEUDAS,AHORRO E INVERSIÓN,EVENTUALES');
-  assert.strictEqual(E.categorias.map((c) => c.nombre).join(), 'Suscripciones,Servicios');
-  assert.strictEqual(item('Salario').vence, 'anteúltimo hábil');
-  assert.strictEqual(item('Luz').vence, '1er hábil');
-  assert.strictEqual(item('Netflix').medio, 'Débito automático');
-  assert.strictEqual(item('Ahorro del Mes').clase, 'A');
-  assert.strictEqual(item('Prestamo Banco').seccion.toUpperCase(), 'PRÉSTAMOS Y DEUDAS');
+test('valores: cuentas conservadas, proyección estimada dentro del horizonte', () => {
+  const d = G.api_datos();
+  const luz = concepto('Luz');
+  assert.deepStrictEqual(plano(valor(d, luz.id, '2026-04')), [luz.id, '2026-04', 150, '100+50', 0]);
+  assert.deepStrictEqual(plano(valor(d, luz.id, '2026-09')), [luz.id, '2026-09', 108, '', 0]);
+  assert.deepStrictEqual(plano(valor(d, luz.id, '2026-12')), [luz.id, '2026-12', 108, '', 1]);
+  assert.ok(valor(d, luz.id, '2027-09'));
+  assert.ok(!valor(d, luz.id, '2027-10'), 'no pasa el horizonte');
+  assert.ok(!valor(d, concepto('Netflix').id, '2026-10'), 'concepto dado de baja no se proyecta');
 });
 
-test('cuentas escritas a mano se conservan como fórmula', () => {
-  assert.strictEqual(celda('Luz', 2026, 4).getFormula(), '=100+50');
+test('eventuales pasan a Movimientos con categoría', () => {
+  const d = G.api_datos();
+  const m = d.movimientos.map((x) => [x.descripcion, x.categoria, x.monto, x.cuenta, x.mes]);
+  assert.deepStrictEqual(plano(m), [['Heladera', 'Hogar', 900000, '', '2026-03'], ['Vuelo a Bariloche', 'Viajes', 350000, '200000+150000', '2026-07']]);
 });
 
-test('proyección: Luz repite septiembre hacia adelante en gris itálica, dentro del horizonte', () => {
-  assert.strictEqual(celda('Luz', 2026, 9).getValue(), 108);
-  assert.strictEqual(celda('Luz', 2026, 9).getFontStyle(), 'normal');
-  for (const [y, m] of [[2026, 10], [2026, 12], [2027, 9]]) {
-    assert.strictEqual(celda('Luz', y, m).getValue(), 108, `${y}-${m}`);
-    assert.strictEqual(celda('Luz', y, m).getFontStyle(), 'italic');
-  }
-  assert.strictEqual(celda('Luz', 2027, 10).getValue(), '');
-  // Netflix se dio de baja en mayo: no se proyecta
-  assert.strictEqual(celda('Netflix', 2026, 10).getValue(), '');
+test('editar una celda confirma y arrastra el precio a los meses siguientes', () => {
+  const luz = concepto('Luz');
+  const r = plano(G.api_guardarCeldas([{ c: luz.id, mes: '2026-10', texto: '=150+50' }]));
+  const porMes = Object.fromEntries(r.valores[luz.id].map((x) => [x[0], x]));
+  assert.deepStrictEqual(porMes['2026-10'], ['2026-10', 200, '150+50', 0]);
+  assert.deepStrictEqual(porMes['2026-11'], ['2026-11', 200, '150+50', 1]);
+  // Confirmar un estimado sin cambiar el valor
+  G.api_guardarCeldas([{ c: luz.id, mes: '2026-11', estado: 'confirmado' }]);
+  assert.strictEqual(valor(G.api_datos(), luz.id, '2026-11')[4], 0);
+  // Borrar un mes futuro lo devuelve al estimado automático (desde septiembre)
+  G.api_guardarCeldas([{ c: luz.id, mes: '2026-11', texto: '' }, { c: luz.id, mes: '2026-10', texto: '' }]);
+  const d = G.api_datos();
+  assert.deepStrictEqual(plano(valor(d, luz.id, '2026-10')).slice(2), [108, '', 1]);
+  // Un 0 da de baja hacia adelante
+  G.api_guardarCeldas([{ c: luz.id, mes: '2026-10', texto: '0' }]);
+  assert.deepStrictEqual(plano(valor(G.api_datos(), luz.id, '2026-12')).slice(2), [0, '', 1]);
+  G.api_guardarCeldas([{ c: luz.id, mes: '2026-10', texto: '' }]);
+  assert.throws(() => G.api_guardarCeldas([{ c: luz.id, mes: '2026-10', texto: 'hola' }]), /No entendí/);
 });
 
-test('subtotales, resumen y totales anuales son fórmulas', () => {
-  const s = E.secciones[1];
-  assert.match(sh.getRange(s.fila, col(2026, 9)).getFormulasR1C1()[0][0], /^=SUM\(R\d+C,R\d+C\)$/);
-  assert.match(sh.getRange(E.resumen.L, col(2026, 9)).getFormulasR1C1()[0][0], /^=R\d+C-R\d+C-R\d+C$/);
-  assert.match(sh.getRange(item('Luz').fila, E.totales[0].col).getFormula(), /^=SUM\(\$G\d+:\$R\d+\)$/);
+test('crear, editar y borrar conceptos', () => {
+  const r = plano(G.api_guardarConcepto({ nombre: 'Gas', seccion: 'Gastos fijos', categoria: 'Servicios', vence: '10 hábil', medio: 'Débito automático', proyeccion: 'Promedio 3 meses' }));
+  const gas = r.conceptos.find((c) => c.nombre === 'Gas');
+  const luz = r.conceptos.find((c) => c.nombre === 'Luz');
+  assert.ok(gas && gas.orden > luz.orden, 'se agrega al final de su categoría');
+  assert.ok(r.venc[gas.id]);
+  assert.throws(() => G.api_guardarConcepto({ nombre: 'X', seccion: 'Gastos fijos', vence: 'cuando pinte' }), /No entendí/);
+  G.api_guardarCeldas([{ c: gas.id, mes: '2026-09', texto: '30000' }]);
+  assert.strictEqual(valor(G.api_datos(), gas.id, '2026-10')[2], 30000);
+  const r2 = plano(G.api_guardarConcepto(Object.assign({}, gas, { nombre: 'Gas natural' })));
+  assert.ok(r2.conceptos.find((c) => c.id === gas.id && c.nombre === 'Gas natural'));
+  G.api_borrarConcepto(gas.id);
+  const d = G.api_datos();
+  assert.ok(!d.conceptos.find((c) => c.id === gas.id));
+  assert.ok(!d.valores.some((v) => v[0] === gas.id));
 });
 
-test('eventuales: van a Movimientos y la fila suma por categoría', () => {
-  const mov = env.ss.getSheetByName('Movimientos');
-  const filas = mov.getRange(2, 1, 2, 7).getValues();
-  assert.deepStrictEqual(filas.map((r) => [r[1], r[2]]), [['Heladera', 'Hogar'], ['Vuelo a Bariloche', 'Viajes']]);
-  assert.strictEqual(mov.getRange(3, 4).getFormula(), '=200000+150000');
-  assert.match(sh.getRange(item('Hogar').fila, col(2026, 3)).getFormulasR1C1()[0][0], /^=SUMIFS\(Movimientos!C10/);
+test('renombrar una categoría de eventuales mueve sus gastos', () => {
+  const viajes = concepto('Viajes');
+  G.api_guardarConcepto(Object.assign({}, viajes, { nombre: 'Viajes y escapadas' }));
+  assert.ok(G.api_datos().movimientos.some((m) => m.categoria === 'Viajes y escapadas'));
 });
 
-test('arrastre: al cargar un aumento, los meses siguientes se actualizan', () => {
-  const c = celda('Luz', 2026, 10);
-  c.setValue(200);
-  G.onEdit({ range: c, source: env.ss, value: 200 });
-  assert.strictEqual(celda('Luz', 2026, 10).getFontStyle(), 'normal');
-  assert.strictEqual(celda('Luz', 2026, 11).getValue(), 200);
-  assert.strictEqual(celda('Luz', 2026, 11).getFontStyle(), 'italic');
-  assert.strictEqual(celda('Luz', 2027, 9).getValue(), 200);
+test('movimientos: cuotas, tarjeta al mes siguiente, editar y borrar', () => {
+  const r = plano(G.api_guardarMovimiento({ descripcion: 'Notebook', texto: '900k', categoria: 'Tecnología', cuotas: 6, medio: 'Tarjeta VISA', fecha: '2026-09-20' }));
+  assert.strictEqual(r.movimiento.monto, 900000);
+  assert.strictEqual(r.movimiento.mes, '2026-10');
+  const r2 = plano(G.api_guardarMovimiento({ descripcion: 'Cena', texto: '25000', categoria: 'no existe', fecha: '2026-09-21', medio: 'Efectivo' }));
+  assert.strictEqual(r2.movimiento.categoria, 'Otros');
+  assert.strictEqual(r2.movimiento.mes, '2026-09');
+  G.api_guardarMovimiento(Object.assign({}, r2.movimiento, { texto: '30000' }));
+  assert.strictEqual(G.api_datos().movimientos.find((m) => m.id === r2.movimiento.id).monto, 30000);
+  G.api_borrarMovimiento(r2.movimiento.id);
+  assert.ok(!G.api_datos().movimientos.find((m) => m.id === r2.movimiento.id));
 });
 
-test('regla de vencimiento escrita a mano: calcula el próximo y avisa', () => {
-  const cfg = env.ss.getSheetByName('Config');
-  cfg.getRange(G.CFG_FILA_FERIADOS + 2, 1, 1, 3).setValues([[new D(2026, 9, 12), 'Diversidad cultural', 'manual']]);
-  G.FERIADOS_CACHE_ = null;
-  const c = sh.getRange(item('Netflix').fila, 3);
-  c.setValue('10 hábil');
-  G.onEdit({ range: c, source: env.ss });
-  const prox = sh.getRange(item('Netflix').fila, 4).getValue();
-  assert.ok(prox instanceof D);
-  assert.strictEqual(G.isoDia_(prox), '2026-10-13'); // 10/10 es sábado y el lunes 12 es feriado
-});
-
-test('panel: carga fija, eventual y deshacer', () => {
-  const r1 = G.panelGuardar({ tipo: 'fijo', fila: item('Luz').fila, mes: '2026-11', texto: '210' });
-  assert.ok(r1.ok, r1.mensaje);
-  assert.strictEqual(celda('Luz', 2026, 12).getValue(), 210);
-  G.panelDeshacer();
-  assert.strictEqual(celda('Luz', 2026, 11).getValue(), 200);
-  assert.strictEqual(celda('Luz', 2026, 11).getFontStyle(), 'italic');
-  assert.strictEqual(celda('Luz', 2026, 12).getValue(), 200);
-
-  const r2 = G.panelGuardar({ tipo: 'mov', texto: '900k', desc: 'Notebook', categoria: 'Tecnología', cuotas: 6, medio: 'Tarjeta VISA', fecha: '2026-09-20' });
-  assert.ok(r2.ok);
-  const mov = env.ss.getSheetByName('Movimientos');
-  assert.deepStrictEqual(mov.getRange(4, 2, 1, 5).getValues()[0], ['Notebook', 'Tecnología', 900000, 6, 'Tarjeta VISA']);
-});
-
-test('panelDatos y dashboardDatos devuelven el mes actual', () => {
-  const p = G.panelDatos();
-  assert.strictEqual(p.mes, '2026-09');
-  assert.ok(p.items.find((i) => i.nombre === 'Luz'));
-  assert.ok(p.categorias.includes('Viajes'));
-  const d = G.dashboardDatos();
-  assert.strictEqual(d.meses.length, 24);
-  assert.strictEqual(d.mesActual, '2026-09');
-  const luz = d.items.find((i) => i.nombre === 'Luz');
-  assert.strictEqual(luz.e[d.meses.indexOf('2026-12')], 1);
-});
-
-test('tarea diaria: cierra el mes, confirma débitos y sincroniza el calendario', () => {
+test('tarea diaria: calendario idempotente', () => {
   G.tareaDiaria();
-  const titulos = env.eventos.filter((e) => !e._borrado).map((e) => e._t).sort();
-  assert.ok(titulos.some((t) => /Luz · \$ 108/.test(t)), titulos.join(' | '));
-  assert.ok(titulos.some((t) => /💰 Salario/.test(t)));
-  // Segunda corrida: idempotente
-  const n = env.eventos.length;
+  const n = env.eventos.filter((e) => !e._borrado).length;
+  assert.ok(n > 0);
+  assert.ok(env.eventos.some((e) => /Luz/.test(e._t)));
   G.tareaDiaria();
-  assert.strictEqual(env.eventos.length, n);
+  assert.strictEqual(env.eventos.filter((e) => !e._borrado).length, n);
 });
 
-test('insertar una fila nueva en una categoría: toma fórmulas y validaciones', () => {
-  const luz = item('Luz').fila;
-  sh.insertRowBefore(luz + 1);
-  G.alCambiar({ changeType: 'INSERT_ROW' });
-  const c = sh.getRange(luz + 1, 2);
-  c.setValue('Gas');
-  G.onEdit({ range: c, source: env.ss });
-  assert.strictEqual(sh.getRange(luz + 1, 6).getValue(), 'Repetir');
-  const cat = est().categorias.find((x) => x.nombre === 'Servicios');
-  const m = /^=SUM\(R(\d+)C:R(\d+)C\)$/.exec(sh.getRange(cat.fila, col(2026, 9)).getFormulasR1C1()[0][0]);
-  assert.ok(m && Number(m[1]) === cat.fila + 1 && Number(m[2]) >= luz + 1);
+test('configuración y feriados', () => {
+  const d = plano(G.api_guardarConfig({ horizonte: '6', calendario: 'Finanzas' }));
+  assert.strictEqual(d.cfg.horizonte, 6);
+  const luz = d.conceptos.find((c) => c.nombre === 'Luz');
+  assert.ok(!valor(d, luz.id, '2027-06'), 'el horizonte más corto recorta la proyección');
+  const f = plano(G.api_guardarFeriados([{ fecha: '2026-10-12', nombre: 'Diversidad cultural' }]));
+  assert.strictEqual(f.feriados.length, 1);
+});
+
+test('limpieza: detecta y borra las hojas que sobran (nunca las tablas)', () => {
+  const sobrantes = plano(G.api_hojasSobrantes()).map((h) => h.nombre).sort();
+  assert.deepStrictEqual(sobrantes, ['Finanzas', 'Pagos', 'Reservas']);
+  const r = plano(G.api_borrarHojas(sobrantes.concat(['Conceptos'])));
+  assert.deepStrictEqual(r.borradas.sort(), sobrantes);
+  assert.deepStrictEqual(env.ss.getSheets().map((s) => s.getName()), ['Conceptos', 'Valores', 'Movimientos', 'Indices', 'Feriados', 'Config']);
+  assert.ok(r.respaldo);
+});
+
+/* ---------- Escenario 2: planilla versión 2 ---------- */
+test('migra la grilla de la versión 2 conservando estimados y movimientos', () => {
+  const G2 = cargar({ hoy: HOY });
+  const env2 = crearEntorno(G2);
+  const D = G2.Date;
+  const sh = env2.ss.insertSheet('Finanzas');
+  sh.insertColumnsAfter(26, 10);
+  const meses = Array.from({ length: 12 }, (_, i) => new D(2026, i, 1));
+  const n = 6 + 12 + 1;
+  const fila = (a, b, c, e, f, vals) => { const r = Array(n).fill(''); r[0] = a; r[1] = b; r[2] = c || ''; r[4] = e || ''; r[5] = f || ''; (vals || []).forEach((v, i) => { r[6 + i] = v; }); return r; };
+  const cab1 = Array(n).fill(''), cab2 = Array(n).fill('');
+  meses.forEach((d, i) => { cab2[6 + i] = d; }); cab2[18] = 'Total 2026';
+  const filas = [cab1, cab2,
+    fila('RES:I', 'Ingresos'), fila('RES:G', 'Gastos'), fila('RES:A', 'Ahorro'), fila('RES:L', 'Libre'), fila('', ''),
+    fila('SEC:I', 'INGRESOS'), fila('', 'Sueldo', 'anteúltimo hábil', 'Transferencia', 'Repetir', [100, 100, 100, 100, 100, 100, 100, 100, 120, 120, 120, 120]),
+    fila('SEC:G', 'GASTOS FIJOS'), fila('CAT', 'Servicios'), fila('', 'Internet', '10', 'Débito automático', 'Repetir', ['', '', '', '', '', '', '', 50, 55, 55, 55, 55]),
+    fila('SEC:G:MOV', 'EVENTUALES'), fila('', 'Hogar'), fila('', 'Otros')];
+  sh.getRange(1, 1, filas.length, n).setValues(filas);
+  sh.getRange(9, 6 + 10, 1, 4).setFontStyles([['italic', 'italic', 'italic', 'italic']]);
+  sh.getRange(12, 6 + 10, 1, 3).setFontStyles([['italic', 'italic', 'italic']]);
+  sh.getRange(12, 6 + 9).setFormula('=50+5');
+  const mov = env2.ss.insertSheet('Movimientos');
+  mov.getRange(1, 1, 3, 8).setValues([
+    ['Fecha', 'Descripción', 'Categoría', 'Monto', 'Cuotas', 'Medio de pago', 'Mes (opcional)', 'Desde (auto)'],
+    [new D(2026, 8, 20), 'Silla', 'Hogar', 300000, 3, 'Tarjeta VISA', '', new D(2026, 9, 1)],
+    [new D(2026, 8, 21), 'Algo', 'Categoria vieja', 1000, 1, '', '', new D(2026, 8, 1)]]);
+  assert.strictEqual(G2.api_estado().fuente.tipo, 'v2');
+  const r = plano(G2.api_instalar('migrar'));
+  assert.ok(r.ok, r.detalle);
+  const d = plano(G2.api_datos());
+  const sueldo = d.conceptos.find((c) => c.nombre === 'Sueldo');
+  const internet = d.conceptos.find((c) => c.nombre === 'Internet');
+  assert.strictEqual(sueldo.seccion, 'Ingresos');
+  assert.strictEqual(internet.categoria, 'Servicios');
+  assert.strictEqual(internet.vence, '10');
+  assert.deepStrictEqual(valor(d, sueldo.id, '2026-09').slice(2), [120, '', 0]);
+  assert.deepStrictEqual(valor(d, sueldo.id, '2026-11').slice(2), [120, '', 1]);
+  assert.deepStrictEqual(valor(d, internet.id, '2026-09').slice(2), [55, '50+5', 0]);
+  assert.deepStrictEqual(d.movimientos.map((m) => [m.descripcion, m.categoria, m.mes, m.cuotas]), [['Silla', 'Hogar', '2026-10', 3], ['Algo', 'Otros', '2026-09', 1]]);
+  assert.ok(env2.ss.getSheetByName('Movimientos (anterior)'), 'la hoja vieja de movimientos queda para limpiar');
 });

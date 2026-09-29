@@ -68,30 +68,3 @@ function parsearMonto(texto) {
 function esFormulaAritmetica(f) {
   return /^=\s*[\d\s.+\-*/()%]+$/.test(String(f || ''));
 }
-
-/**
- * Convierte una fórmula R1C1 a A1 para una celda destino.
- * Soporta RC, R[-1]C[2], R2C5 y rangos (RC7:RC18). Ignora texto entre comillas.
- */
-function r1c1aA1(f, fila, col) {
-  var partes = String(f).split('"');
-  for (var p = 0; p < partes.length; p += 2) {
-    partes[p] = partes[p].replace(/(^|[^A-Za-z0-9_.$!])R(\[-?\d+\]|\d+)?C(\[-?\d+\]|\d+)?(?![A-Za-z0-9_(])/g,
-      function (_, pre, r, c) {
-        var abs = function (x) { return x !== undefined && x !== '' && x.charAt(0) !== '[' ? '$' : ''; };
-        return pre + abs(c) + colLetra_(resolver_(c, col)) + abs(r) + resolver_(r, fila);
-      });
-  }
-  return partes.join('"');
-  function resolver_(x, base) {
-    if (x === undefined || x === '') return base;
-    if (x.charAt(0) === '[') return base + Number(x.slice(1, -1));
-    return Number(x);
-  }
-}
-
-function colLetra_(n) {
-  var s = '';
-  while (n > 0) { var m = (n - 1) % 26; s = String.fromCharCode(65 + m) + s; n = Math.floor((n - 1) / 26); }
-  return s;
-}

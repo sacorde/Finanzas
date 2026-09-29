@@ -1,7 +1,7 @@
 const test = require('node:test');
 const assert = require('node:assert');
 const { cargar, cargarBloqueHtml } = require('./harness');
-const P = cargarBloqueHtml('Panel.html', 'parser');
+const P = cargarBloqueHtml('Nucleo.html', 'nucleo');
 const G = cargar();
 
 const ctx = {
@@ -73,4 +73,32 @@ test('montos: cliente y servidor coinciden', () => {
     const a = P.montoP(s), b = G.parsearMonto(s);
     assert.strictEqual(a && a.valor, b && b.valor, s);
   }
+});
+
+test('sumas de eventuales reparten cuotas', () => {
+  const E = JSON.parse(JSON.stringify(P.sumasEventuales([
+    { categoria: 'Hogar', monto: 900, cuotas: 3, mes: '2026-11' }, { categoria: 'Hogar', monto: 50, cuotas: 1, mes: '2026-12' }
+  ])));
+  assert.deepStrictEqual(E, { Hogar: { '2026-11': 300, '2026-12': 350, '2027-01': 300 } });
+  const del = P.movimientosDelMes([{ categoria: 'Hogar', monto: 900, cuotas: 3, mes: '2026-11' }], 'Hogar', '2027-01');
+  assert.strictEqual(del[0].cuota, 3);
+});
+
+test('filas de la grilla: secciones, categorías y filas para agregar', () => {
+  const sec = [{ nombre: 'Ingresos', clase: 'I', tipo: 'fijo' }, { nombre: 'Gastos fijos', clase: 'G', tipo: 'fijo' }, { nombre: 'Eventuales', clase: 'G', tipo: 'eventual' }];
+  const c = (id, nombre, seccion, categoria, tipo, orden) => ({ id, nombre, seccion, categoria, tipo: tipo || 'fijo', orden });
+  const con = [c('1', 'Salario', 'Ingresos', 'Ingresos', 'fijo', 1), c('2', 'Luz', 'Gastos fijos', 'Servicios', 'fijo', 3), c('3', 'Alquiler', 'Gastos fijos', 'Vivienda', 'fijo', 2), c('4', 'Viajes', 'Eventuales', 'Viajes', 'eventual', 4)];
+  const f = P.construirFilas(con, sec, {}).map((x) => x.t + ':' + (x.c ? x.c.nombre : x.categoria || x.sec.nombre));
+  assert.deepStrictEqual([...f], ['sec:Ingresos', 'item:Salario', 'add:Ingresos', 'sec:Gastos fijos', 'cat:Vivienda', 'item:Alquiler', 'add:Vivienda', 'cat:Servicios', 'item:Luz', 'add:Servicios', 'addcat:Gastos fijos', 'sec:Eventuales', 'item:Viajes', 'add:Eventuales']);
+  const cerr = P.construirFilas(con, sec, { 's:Gastos fijos': true }).map((x) => x.t);
+  assert.strictEqual(cerr.filter((t) => t === 'cat').length, 0);
+});
+
+test('línea de tiempo igual en cliente y servidor', () => {
+  const idx = { a: { '2024-03': {} } };
+  const cli = P.lineaDeTiempoP(idx, [], '2026-09-28', 12);
+  const srv = G.lineaDeTiempo_(idx, [], '2026-09-28', 12);
+  assert.strictEqual(cli.join(), srv.join());
+  assert.strictEqual(cli[0], '2024-01');
+  assert.strictEqual(cli[cli.length - 1], '2027-12');
 });

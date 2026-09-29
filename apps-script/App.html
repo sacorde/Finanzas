@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<base target="_top">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Finanzas</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<?!= include('Estilos') ?>
+</head>
+<body>
+<header class="top">
+  <div class="marca">💰 <span>Finanzas</span></div>
+  <nav class="nav" id="navApp" role="tablist" hidden>
+    <button role="tab" data-v="planilla" aria-selected="true"><span>📋</span>Planilla</button>
+    <button role="tab" data-v="movimientos" aria-selected="false"><span>🧾</span>Movimientos</button>
+    <button role="tab" data-v="tablero" aria-selected="false"><span>📊</span>Dashboard</button>
+    <button role="tab" data-v="config" aria-selected="false"><span>⚙️</span>Ajustes</button>
+  </nav>
+  <div class="espacio"></div>
+  <div class="estado-guardado" id="guardado" hidden><i></i><span>Guardado</span></div>
+  <a class="enlace" id="linkDb" target="_blank" rel="noopener" hidden>Base de datos ↗</a>
+</header>
+
+<main>
+  <div class="cargando" id="cargando">Cargando…</div>
+
+  <!-- PLANILLA -->
+  <section id="v-planilla" class="vista" hidden>
+    <div class="barra">
+      <div class="rapida">
+        <input id="rapida" autocomplete="off" placeholder="Cargá algo: luz 89.423 · cena 25k · heladera 900k 6 cuotas visa   ( / )" aria-label="Carga rápida">
+        <div class="vista-previa" id="previa" hidden></div>
+      </div>
+      <button class="boton" id="bHoy" title="Ir al mes actual">🎯 Hoy</button>
+      <div class="leyenda-celdas"><b>1.234</b> cargado <em>1.234</em> estimado</div>
+    </div>
+    <div class="grilla-wrap">
+      <div class="grilla" id="grilla" tabindex="0" aria-label="Planilla de finanzas"></div>
+      <div class="pie num" id="pie"><span id="pieSel">Seleccioná celdas para ver la suma</span><span class="ayuda">Enter editar · Supr borrar · Ctrl+Z deshacer · clic derecho: más opciones</span></div>
+    </div>
+    <div class="espacio-pie"></div>
+  </section>
+
+  <!-- MOVIMIENTOS -->
+  <section id="v-movimientos" class="vista scroll" hidden>
+    <div class="contenido">
+      <div class="card">
+        <div style="display:flex;align-items:flex-start;gap:10px;flex-wrap:wrap">
+          <div style="flex:1"><h2>Gastos eventuales</h2><p class="sub">Compras sueltas y en cuotas. Se suman solas en la sección Eventuales de la planilla.</p></div>
+          <button class="boton primario" id="bNuevoMov">＋ Nuevo gasto</button>
+        </div>
+        <div class="filtros-mov">
+          <select id="fMes" aria-label="Mes"></select>
+          <select id="fCat" aria-label="Categoría"></select>
+          <input id="fTxt" placeholder="Buscar…" aria-label="Buscar">
+          <span class="espacio"></span>
+          <span id="fTotal" class="num" style="font-weight:700"></span>
+        </div>
+        <div style="overflow-x:auto"><table class="t" id="tMov"></table></div>
+      </div>
+    </div>
+  </section>
+
+  <?!= include('Tablero') ?>
+
+  <!-- AJUSTES -->
+  <section id="v-config" class="vista scroll" hidden>
+    <div class="contenido" id="config"></div>
+  </section>
+
+  <!-- INSTALACIÓN -->
+  <section id="v-instalar" class="vista scroll" hidden>
+    <div class="bienvenida" id="bienvenida"></div>
+  </section>
+</main>
+
+<div class="velo" id="velo" hidden></div>
+<aside class="panel" id="panel" aria-hidden="true">
+  <header><h2 id="panelTitulo"></h2><button class="cerrar" id="panelCerrar" aria-label="Cerrar">×</button></header>
+  <div class="cuerpo" id="panelCuerpo"></div>
+  <footer id="panelPie"></footer>
+</aside>
+<div class="menu" id="menu" hidden></div>
+<div class="avisos" id="avisos" aria-live="polite"></div>
+
+<?!= include('Nucleo') ?>
+<?!= include('Grilla') ?>
+<?!= include('AppJs') ?>
+</body>
+</html>

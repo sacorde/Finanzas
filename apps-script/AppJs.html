@@ -1,0 +1,593 @@
+<script>
+/* Finanzas · App web: estado, servidor, vistas y paneles */
+var $ = function (id) { return document.getElementById(id); };
+var S = {
+  conceptos: [], V: {}, movimientos: [], eventuales: {}, meses: [], hoy: '', mesHoy: '', cfg: {}, config: {}, cfgDef: [],
+  venc: {}, indices: [], feriados: [], secciones: [], proyecciones: [], palabras: {}, aprendidas: {}, inflEsperada: 3,
+  vista: 'planilla', colapsadas: {}, aniosCerrados: null,
+  deshacer: [], rehacer: [], cola: [], enviando: false, pend: {}
+};
+var ETIQUETAS_CFG = {
+  horizonte: 'Meses a proyectar hacia adelante', inflacion: 'Inflación mensual esperada (%)', cerrarMes: 'Confirmar estimados al cerrar el mes',
+  confirmarDA: 'Confirmar débitos automáticos al vencer', tarjetaMesSig: 'Compras con tarjeta impactan el mes siguiente',
+  calendario: 'Calendario de vencimientos', mesesCal: 'Meses a sincronizar en el calendario', aviso: 'Aviso previo (días)', dolar: 'Dólar de referencia', medios: 'Medios de pago'
+};
+var pesos = function (n) { return (n < 0 ? '-$ ' : '$ ') + Math.abs(Math.round(n || 0)).toLocaleString('es-AR'); };
+
+/* ---------- Servidor ---------- */
+function api(fn) {
+  var args = Array.prototype.slice.call(arguments, 1);
+  return new Promise(function (ok, mal) {
+    if (window.google && google.script && google.script.run) {
+      var r = google.script.run.withSuccessHandler(ok).withFailureHandler(function (e) { mal(e instanceof Error ? e : new Error(e && e.message || String(e))); });
+      r[fn].apply(r, args);
+    } else if (window.MOCK && window.MOCK[fn]) {
+      setTimeout(function () { try { ok(window.MOCK[fn].apply(null, args)); } catch (e) { mal(e); } }, 120);
+    } else mal(new Error('Sin conexión con el servidor'));
+  });
+}
+
+function estadoGuardado(estado, texto) {
+  var el = $('guardado');
+  el.hidden = false;
+  el.className = 'estado-guardado' + (estado === 'guardando' ? ' guardando' : estado === 'error' ? ' error' : '');
+  el.querySelector('span').textContent = texto || (estado === 'guardando' ? 'Guardando…' : estado === 'error' ? 'Error al guardar' : 'Guardado');
+}
+
+/* ---------- Carga ---------- */
+function iniciar() {
+  cargarPreferencias();
+  api('api_estado').then(function (e) {
+    $('linkDb').href = e.urlPlanilla; $('linkDb').hidden = false;
+    if (!e.instalado) return mostrarInstalacion(e);
+    return cargarDatos();
+  }).catch(function (err) { $('cargando').textContent = 'No pude conectarme: ' + err.message; });
+}
+
+function cargarDatos() {
+  return api('api_datos').then(function (d) { prepararDatos(d); mostrarVista(S.vista); });
+}
+
+function prepararDatos(d) {
+  S.conceptos = d.conceptos; S.V = indexarValoresP(d.valores); S.movimientos = d.movimientos;
+  S.hoy = d.hoy; S.mesHoy = d.hoy.slice(0, 7); S.cfg = d.cfg; S.config = d.config; S.cfgDef = d.cfgDef; S.venc = d.venc;
+  S.indices = d.indices; S.feriados = d.feriados; S.secciones = d.secciones; S.proyecciones = d.proyecciones;
+  S.palabras = d.palabras; S.aprendidas = d.aprendidas; S.inflEsperada = d.inflEsperada;
+  recalcular();
+  if (!S.aniosCerrados) {
+    S.aniosCerrados = {};
+    S.meses.forEach(function (m) { if (m.slice(0, 4) < S.mesHoy.slice(0, 4)) S.aniosCerrados[m.slice(0, 4)] = true; });
+  }
+  $('linkDb').href = d.urlPlanilla;
+  $('navApp').hidden = false;
+  $('cargando').hidden = true;
+}
+
+function recalcular() {
+  S.eventuales = sumasEventuales(S.movimientos);
+  S.meses = lineaDeTiempoP(S.V, S.movimientos, S.hoy, S.cfg.horizonte || 12);
+}
+
+function cargarPreferencias() {
+  try {
+    var p = JSON.parse(localStorage.getItem('fz-prefs') || '{}');
+    S.colapsadas = p.colapsadas || {}; if (p.anios) S.aniosCerrados = p.anios; if (p.vista) S.vista = p.vista;
+  } catch (e) { /* sin almacenamiento */ }
+}
+function guardarPreferencias() {
+  try { localStorage.setItem('fz-prefs', JSON.stringify({ colapsadas: S.colapsadas, anios: S.aniosCerrados, vista: S.vista })); } catch (e) { /* ok */ }
+}
+
+/* ---------- Vistas ---------- */
+function mostrarVista(v) {
+  S.vista = v; guardarPreferencias();
+  document.querySelectorAll('#navApp button').forEach(function (b) { b.setAttribute('aria-selected', String(b.dataset.v === v)); });
+  ['planilla', 'movimientos', 'tablero', 'config', 'instalar'].forEach(function (x) { $('v-' + x).hidden = x !== v; });
+  if (v === 'planilla') { dibujarGrilla(); $('grilla').focus({ preventScroll: true }); }
+  if (v === 'movimientos') dibujarMovimientos();
+  if (v === 'tablero') Tablero.mostrar(datosTablero(S));
+  if (v === 'config') dibujarConfig();
+}
+
+function redibujar() {
+  recalcular();
+  if (S.vista === 'planilla') dibujarGrilla();
+  else if (S.vista === 'movimientos') dibujarMovimientos();
+  else if (S.vista === 'tablero') Tablero.mostrar(datosTablero(S));
+}
+
+/* ---------- Cambios en celdas: local al instante, servidor en cola ---------- */
+function crudoDe(cid, mes) {
+  var v = S.V[cid] && S.V[cid][mes];
+  return { c: cid, mes: mes, texto: v ? textoCrudo(v) : '', estado: v ? (v.e ? 'estimado' : 'confirmado') : undefined };
+}
+
+function aplicarCambios(lista, opts) {
+  opts = opts || {};
+  for (var i = 0; i < lista.length; i++) {
+    var t = lista[i].texto;
+    if (t !== undefined && String(t).trim() !== '' && !montoP(t)) { aviso('No entendí "' + t + '". Usá números o cuentas: 1500, =1500*3, 150k', true); return false; }
+  }
+  var previos = lista.map(function (ch) { return crudoDe(ch.c, ch.mes); });
+  lista.forEach(function (ch) {
+    var porMes = S.V[ch.c] = S.V[ch.c] || {};
+    if (ch.texto === undefined) { if (porMes[ch.mes]) porMes[ch.mes].e = ch.estado === 'estimado' ? 1 : 0; }
+    else if (String(ch.texto).trim() === '') delete porMes[ch.mes];
+    else { var p = montoP(ch.texto); porMes[ch.mes] = { m: p.valor, c: p.cuenta, e: ch.estado === 'estimado' ? 1 : 0 }; }
+  });
+  if (!opts.sinHistorial) { S.deshacer.push({ hacer: lista, deshacer: previos }); S.rehacer = []; if (S.deshacer.length > 100) S.deshacer.shift(); }
+  redibujar();
+  encolar(lista);
+  return true;
+}
+
+function deshacer() {
+  var x = S.deshacer.pop();
+  if (!x) { aviso('Nada para deshacer'); return; }
+  S.rehacer.push(x);
+  aplicarCambios(x.deshacer, { sinHistorial: true });
+  aviso('Deshecho');
+}
+function rehacer() {
+  var x = S.rehacer.pop();
+  if (!x) return;
+  S.deshacer.push(x);
+  aplicarCambios(x.hacer, { sinHistorial: true });
+}
+
+function encolar(lista) {
+  S.cola.push(lista);
+  lista.forEach(function (ch) { S.pend[ch.c] = (S.pend[ch.c] || 0) + 1; });
+  procesarCola();
+}
+
+function procesarCola() {
+  if (S.enviando || !S.cola.length) return;
+  // Juntar lo pendiente en un solo envío
+  var lote = [];
+  while (S.cola.length) lote = lote.concat(S.cola.shift());
+  S.enviando = true;
+  estadoGuardado('guardando');
+  api('api_guardarCeldas', lote).then(function (r) {
+    lote.forEach(function (ch) { S.pend[ch.c]--; });
+    Object.keys(r.valores).forEach(function (cid) {
+      if (S.pend[cid] > 0) return; // hay cambios más nuevos en camino
+      S.V[cid] = {};
+      r.valores[cid].forEach(function (x) { S.V[cid][x[0]] = { m: x[1], c: x[2], e: x[3] }; });
+    });
+    redibujar();
+    estadoGuardado('ok');
+  }).catch(function (err) {
+    lote.forEach(function (ch) { S.pend[ch.c]--; });
+    estadoGuardado('error');
+    aviso('No se guardó: ' + err.message + '. Recargo los datos.', true);
+    cargarDatos();
+  }).then(function () { S.enviando = false; procesarCola(); });
+}
+
+/* ---------- Carga rápida ---------- */
+var R = null, candidatoElegido = 0, forzarMov = false;
+function ctxRapida() {
+  return { hoy: S.hoy, items: S.conceptos.filter(function (c) { return c.tipo === 'fijo'; }), medios: S.cfg.medios || [], meses: S.meses, aprendidas: S.aprendidas, palabras: S.palabras };
+}
+
+function actualizarPrevia() {
+  var txt = $('rapida').value, box = $('previa');
+  if (!txt.trim()) { box.hidden = true; R = null; return; }
+  R = interpretar(txt, ctxRapida());
+  if (forzarMov) { R.tipo = 'mov'; R.candidatos = []; }
+  var cats = S.conceptos.filter(function (c) { return c.tipo === 'eventual'; }).map(function (c) { return c.nombre; });
+  if (cats.indexOf(R.categoria) < 0) R.categoria = cats.indexOf('Otros') >= 0 ? 'Otros' : cats[0];
+  var h = [];
+  if (R.tipo === 'fijo') {
+    var c = R.candidatos[Math.min(candidatoElegido, R.candidatos.length - 1)];
+    var mes = R.mes || S.mesHoy, v = S.V[c.id] && S.V[c.id][mes];
+    h.push('<div class="fila"><span class="chip fijo">' + esc(c.categoria) + '</span><b>' + esc(c.nombre) + '</b><span>· ' + esc(etiquetaMesP(mes)) + '</span></div>');
+    h.push('<div class="monto num">' + (R.monto ? pesos(R.monto.valor) : '<span style="color:var(--muted)">Falta el monto</span>') + '</div>');
+    h.push('<div class="nota">' + (v ? (v.e ? 'Reemplaza el estimado de ' + pesos(v.m) + ' y actualiza los meses siguientes.' : 'Reemplaza ' + pesos(v.m) + ' (ya cargado).') : 'Se carga y se arrastra a los meses siguientes.') + '</div>');
+    if (R.candidatos.length > 1) h.push('<div class="nota">¿Otro? ' + R.candidatos.slice(0, 5).map(function (x, i) { return '<button class="mini" data-cand="' + i + '">' + esc(x.nombre) + '</button>'; }).join(' ') + ' <button class="mini" data-cand="mov">es un gasto eventual</button></div>');
+  } else {
+    var mesI = R.mes || mesImpacto(R.fecha || S.hoy, R.medio, S.cfg.tarjetaMesSig);
+    h.push('<div class="fila"><span class="chip mov">' + esc(R.categoria) + '</span><b>' + esc(R.desc || 'Gasto eventual') + '</b>' + (R.medio ? '<span>· ' + esc(R.medio) + '</span>' : '') + '</div>');
+    h.push('<div class="monto num">' + (R.monto ? pesos(R.monto.valor) + (R.cuotas > 1 ? ' <span style="font-size:13px;color:var(--muted)">' + R.cuotas + ' × ' + pesos(R.monto.valor / R.cuotas) + '</span>' : '') : '<span style="color:var(--muted)">Falta el monto</span>') + '</div>');
+    h.push('<div class="nota">Gasto eventual · impacta en ' + esc(etiquetaMesP(mesI)) + (R.cuotas > 1 ? ' y ' + (R.cuotas - 1) + ' meses más' : '') + '. Categoría: <select id="rapCat">' + cats.map(function (c) { return '<option' + (c === R.categoria ? ' selected' : '') + '>' + esc(c) + '</option>'; }).join('') + '</select></div>');
+  }
+  h.push('<div class="nota"><kbd>Enter</kbd> guardar · <kbd>Esc</kbd> cancelar</div>');
+  box.innerHTML = h.join('');
+  box.hidden = false;
+  box.querySelectorAll('[data-cand]').forEach(function (b) {
+    b.onmousedown = function (e) { e.preventDefault(); if (b.dataset.cand === 'mov') forzarMov = true; else candidatoElegido = Number(b.dataset.cand); actualizarPrevia(); };
+  });
+  var sel = $('rapCat'); if (sel) sel.onchange = function () { R.categoria = sel.value; R.catManual = sel.value; };
+}
+
+function guardarRapida() {
+  if (!R || !R.monto) { aviso('Escribí también el monto', true); return; }
+  if (R.tipo === 'fijo' && !forzarMov) {
+    var c = R.candidatos[Math.min(candidatoElegido, R.candidatos.length - 1)];
+    var mes = R.mes || S.mesHoy;
+    if (aplicarCambios([{ c: c.id, mes: mes, texto: R.montoTexto }])) aviso('✓ ' + c.nombre + ' · ' + etiquetaMesP(mes) + ': ' + pesos(R.monto.valor), false, deshacer);
+  } else {
+    var sel = $('rapCat');
+    var p = { descripcion: R.desc ? R.desc.charAt(0).toUpperCase() + R.desc.slice(1) : 'Gasto', texto: R.montoTexto, categoria: sel ? sel.value : R.categoria,
+      cuotas: R.cuotas, medio: R.medio, fecha: R.fecha || S.hoy, mes: R.mes || '' };
+    guardarMovimiento(p, true);
+  }
+  $('rapida').value = ''; $('previa').hidden = true; R = null; candidatoElegido = 0; forzarMov = false;
+}
+
+function guardarMovimiento(p, conDeshacer) {
+  estadoGuardado('guardando');
+  return api('api_guardarMovimiento', p).then(function (r) {
+    var mv = r.movimiento, i = S.movimientos.map(function (x) { return x.id; }).indexOf(mv.id);
+    if (i >= 0) S.movimientos[i] = mv; else S.movimientos.push(mv);
+    S.aprendidas[normP(mv.descripcion)] = mv.categoria;
+    redibujar();
+    estadoGuardado('ok');
+    aviso('✓ ' + mv.descripcion + ' · ' + mv.categoria + ' · ' + pesos(mv.monto) + (mv.cuotas > 1 ? ' en ' + mv.cuotas + ' cuotas' : ''), false,
+      conDeshacer ? function () { borrarMovimiento(mv.id); } : null);
+    return mv;
+  }).catch(function (e) { estadoGuardado('error'); aviso(e.message, true); throw e; });
+}
+
+function borrarMovimiento(id) {
+  estadoGuardado('guardando');
+  return api('api_borrarMovimiento', id).then(function () {
+    S.movimientos = S.movimientos.filter(function (x) { return x.id !== id; });
+    redibujar(); estadoGuardado('ok'); aviso('Gasto borrado');
+  }).catch(function (e) { estadoGuardado('error'); aviso(e.message, true); });
+}
+
+/* ---------- Paneles ---------- */
+function abrirPanel(titulo, cuerpoHtml, botones) {
+  $('panelTitulo').textContent = titulo;
+  $('panelCuerpo').innerHTML = cuerpoHtml;
+  var pie = $('panelPie'); pie.innerHTML = '';
+  (botones || []).forEach(function (b) {
+    var el = document.createElement('button');
+    el.className = 'boton' + (b.clase ? ' ' + b.clase : ''); el.textContent = b.texto; el.onclick = b.accion;
+    if (b.izq) el.style.marginRight = 'auto';
+    pie.appendChild(el);
+  });
+  $('velo').hidden = false; $('panel').classList.add('abierto'); $('panel').setAttribute('aria-hidden', 'false');
+  var primero = $('panelCuerpo').querySelector('input, select'); if (primero) setTimeout(function () { primero.focus(); }, 60);
+}
+function cerrarPanel() {
+  $('velo').hidden = true; $('panel').classList.remove('abierto'); $('panel').setAttribute('aria-hidden', 'true');
+  if (S.vista === 'planilla') $('grilla').focus({ preventScroll: true });
+}
+function opciones(lista, actual) { return lista.map(function (x) { var v = typeof x === 'string' ? x : x.v, t = typeof x === 'string' ? x : x.t; return '<option value="' + esc(v) + '"' + (v === actual ? ' selected' : '') + '>' + esc(t) + '</option>'; }).join(''); }
+
+function panelConcepto(c, nuevo) {
+  var esNuevo = !c;
+  c = c || { nombre: '', seccion: nuevo.seccion, categoria: nuevo.categoria || '', vence: '', medio: '', proyeccion: 'Repetir', tipo: seccionDe(nuevo.seccion).tipo };
+  var ev = c.tipo === 'eventual';
+  var cats = [];
+  S.conceptos.forEach(function (x) { if (x.seccion === c.seccion && x.tipo === 'fijo' && cats.indexOf(x.categoria) < 0) cats.push(x.categoria); });
+  var h = '<div class="campo"><label for="pcNombre">' + (ev ? 'Nombre de la categoría' : 'Nombre') + '</label><input id="pcNombre" value="' + esc(c.nombre) + '" placeholder="' + (ev ? 'Ej: Mascotas' : 'Ej: Gimnasio') + '"></div>';
+  if (!ev) {
+    h += '<div class="fila2"><div class="campo"><label for="pcSec">Sección</label><select id="pcSec">' + opciones(S.secciones.filter(function (s) { return s.tipo === 'fijo'; }).map(function (s) { return s.nombre; }), c.seccion) + '</select></div>' +
+      '<div class="campo"><label for="pcCat">Categoría</label><input id="pcCat" list="pcCats" value="' + esc(nuevo && nuevo.nuevaCategoria ? '' : c.categoria) + '" placeholder="Ej: Servicios"><datalist id="pcCats">' + cats.map(function (x) { return '<option value="' + esc(x) + '">'; }).join('') + '</datalist></div></div>' +
+      '<div class="campo"><label for="pcVence">Vence</label><input id="pcVence" value="' + esc(c.vence) + '" placeholder="Ej: 10 · 10 hábil · 1er hábil · último hábil">' +
+      '<div class="ayuda">En palabras: <b>15</b> · <b>10 hábil</b> (si cae feriado, el siguiente) · <b>5to hábil</b> · <b>último hábil</b> · <b>anteúltimo día</b> · <b>primer lunes</b>. Va a tu Google Calendar.' +
+      (c.id && S.venc[c.id] ? ' Este mes: <b>' + esc((S.venc[c.id][S.mesHoy] || '—').split('-').reverse().join('/')) + '</b>' : '') + '</div></div>' +
+      '<div class="fila2"><div class="campo"><label for="pcMedio">Medio de pago</label><select id="pcMedio"><option value="">—</option>' + opciones(S.cfg.medios || [], c.medio) + '</select>' +
+      '<div class="ayuda">Débito automático: se confirma solo el día que vence.</div></div>' +
+      '<div class="campo"><label for="pcProy">Meses futuros</label><select id="pcProy">' + opciones(S.proyecciones, c.proyeccion) + '</select>' +
+      '<div class="ayuda">Repetir: el último valor. Promedio: para luz, gas. No proyectar: aguinaldo, bonos.</div></div></div>';
+  } else {
+    h += '<p class="ayuda" style="color:var(--muted);font-size:13px">Las categorías de Eventuales agrupan los gastos de la pestaña Movimientos.</p>';
+  }
+  var botones = [];
+  if (!esNuevo) botones.push({ texto: 'Borrar', clase: 'peligro', izq: true, accion: function () { borrarConcepto(c); } });
+  if (!esNuevo) {
+    botones.push({ texto: '↑', accion: function () { moverConcepto(c, -1); } });
+    botones.push({ texto: '↓', accion: function () { moverConcepto(c, 1); } });
+  }
+  botones.push({ texto: esNuevo ? 'Agregar' : 'Guardar', clase: 'primario', accion: function () {
+    var datos = { id: c.id, nombre: $('pcNombre').value, seccion: ev ? c.seccion : $('pcSec').value, categoria: ev ? '' : $('pcCat').value,
+      vence: ev ? '' : $('pcVence').value, medio: ev ? '' : $('pcMedio').value, proyeccion: ev ? '' : $('pcProy').value };
+    estadoGuardado('guardando');
+    api('api_guardarConcepto', datos).then(function (r) {
+      S.conceptos = r.conceptos; S.venc = r.venc;
+      Object.keys(r.valores).forEach(function (cid) { S.V[cid] = {}; r.valores[cid].forEach(function (x) { S.V[cid][x[0]] = { m: x[1], c: x[2], e: x[3] }; }); });
+      if (!esNuevo && c.tipo === 'eventual' && c.nombre !== datos.nombre) S.movimientos.forEach(function (mv) { if (mv.categoria === c.nombre) mv.categoria = datos.nombre.trim(); });
+      cerrarPanel(); redibujar(); estadoGuardado('ok');
+      aviso(esNuevo ? '✓ Agregado. Escribí los montos en la grilla.' : '✓ Guardado');
+    }).catch(function (e) { estadoGuardado('error'); aviso(e.message, true); });
+  } });
+  abrirPanel(esNuevo ? (ev ? 'Nueva categoría de eventuales' : 'Nuevo concepto') : c.nombre, h, botones);
+  $('panelCuerpo').onkeydown = function (e) { if (e.key === 'Enter' && e.target.tagName === 'INPUT') { e.preventDefault(); $('panelPie').querySelector('.primario').click(); } };
+}
+
+function seccionDe(nombre) { return S.secciones.filter(function (s) { return s.nombre === nombre; })[0] || S.secciones[1]; }
+
+function borrarConcepto(c) {
+  var n = Object.keys(S.V[c.id] || {}).length;
+  if (!confirm('¿Borrar "' + c.nombre + '"' + (n ? ' y sus ' + n + ' montos cargados' : '') + '?' + (c.tipo === 'eventual' ? ' Sus gastos pasan a "Otros".' : ''))) return;
+  estadoGuardado('guardando');
+  api('api_borrarConcepto', c.id).then(function (r) {
+    S.conceptos = r.conceptos; delete S.V[c.id];
+    if (c.tipo === 'eventual') return cargarDatos();
+  }).then(function () { cerrarPanel(); redibujar(); estadoGuardado('ok'); aviso('Borrado'); })
+    .catch(function (e) { estadoGuardado('error'); aviso(e.message, true); });
+}
+
+function moverConcepto(c, dir) {
+  var grupo = S.conceptos.filter(function (x) { return x.seccion === c.seccion && x.categoria === c.categoria; }).sort(function (a, b) { return a.orden - b.orden; });
+  var i = grupo.indexOf(c), j = i + dir;
+  if (j < 0 || j >= grupo.length) return;
+  var o = grupo[j].orden; grupo[j].orden = c.orden; c.orden = o;
+  var ids = S.conceptos.slice().sort(function (a, b) { return a.orden - b.orden; }).map(function (x) { return x.id; });
+  redibujar();
+  api('api_ordenarConceptos', ids, []).then(function (r) { S.conceptos = r.conceptos; redibujar(); }).catch(function (e) { aviso(e.message, true); });
+}
+
+function panelMovsCelda(categoria, mes) {
+  var lista = movimientosDelMes(S.movimientos, categoria, mes);
+  var total = lista.reduce(function (a, x) { return a + x.importe; }, 0);
+  var h = '<p style="margin:0 0 10px;color:var(--ink2)">' + esc(etiquetaMesP(mes)) + ' · total <b class="num">' + pesos(total) + '</b></p><ul class="lista-mov">';
+  if (!lista.length) h += '<li class="vacio" style="justify-content:center">Sin gastos en este mes.</li>';
+  lista.forEach(function (x) {
+    h += '<li><div class="d"><b>' + esc(x.mv.descripcion) + '</b><span>' + esc(x.mv.fecha.split('-').reverse().join('/')) + (x.cuotas > 1 ? ' · cuota ' + x.cuota + '/' + x.cuotas : '') + (x.mv.medio ? ' · ' + esc(x.mv.medio) : '') + '</span></div>' +
+      '<div class="i num">' + pesos(x.importe) + '</div><button class="mini" data-edit="' + esc(x.mv.id) + '" title="Editar">✎</button></li>';
+  });
+  h += '</ul>';
+  abrirPanel(categoria, h, [{ texto: '＋ Agregar gasto', clase: 'primario', accion: function () { panelMovimiento(null, { categoria: categoria, mes: mes }); } }]);
+  $('panelCuerpo').querySelectorAll('[data-edit]').forEach(function (b) {
+    b.onclick = function () { panelMovimiento(S.movimientos.filter(function (m) { return m.id === b.dataset.edit; })[0]); };
+  });
+}
+
+function panelMovimiento(mv, pre) {
+  var esNuevo = !mv;
+  pre = pre || {};
+  var hoyMes = S.hoy.slice(0, 7);
+  mv = mv || { descripcion: '', monto: '', cuenta: '', cuotas: 1, medio: '', categoria: pre.categoria || 'Otros', fecha: pre.mes && pre.mes !== hoyMes ? pre.mes + '-01' : S.hoy, mes: '', nota: '' };
+  var cats = S.conceptos.filter(function (c) { return c.tipo === 'eventual'; }).map(function (c) { return c.nombre; });
+  var h = '<div class="campo"><label for="pmDesc">Descripción</label><input id="pmDesc" value="' + esc(mv.descripcion) + '" placeholder="Ej: Heladera"></div>' +
+    '<div class="fila2"><div class="campo"><label for="pmMonto">Monto total</label><input id="pmMonto" class="num" inputmode="decimal" value="' + esc(mv.cuenta ? '=' + mv.cuenta : mv.monto) + '" placeholder="Ej: 900000 o 900k"></div>' +
+    '<div class="campo"><label for="pmCuotas">Cuotas</label><input id="pmCuotas" type="number" min="1" max="60" value="' + (mv.cuotas || 1) + '"></div></div>' +
+    '<div class="fila2"><div class="campo"><label for="pmCat">Categoría</label><select id="pmCat">' + opciones(cats, mv.categoria) + '</select></div>' +
+    '<div class="campo"><label for="pmMedio">Medio de pago</label><select id="pmMedio"><option value="">—</option>' + opciones(S.cfg.medios || [], mv.medio) + '</select></div></div>' +
+    '<div class="fila2"><div class="campo"><label for="pmFecha">Fecha</label><input id="pmFecha" type="date" value="' + esc(mv.fecha) + '"></div>' +
+    '<div class="campo"><label for="pmMes">Impacta en</label><input id="pmMes" type="month" value="' + esc(mv.mes || '') + '"><div class="ayuda" id="pmMesAyuda"></div></div></div>' +
+    '<div class="campo"><label for="pmNota">Nota</label><input id="pmNota" value="' + esc(mv.nota || '') + '"></div>';
+  var botones = [];
+  if (!esNuevo) botones.push({ texto: 'Borrar', clase: 'peligro', izq: true, accion: function () { if (confirm('¿Borrar este gasto?')) borrarMovimiento(mv.id).then(cerrarPanel); } });
+  botones.push({ texto: esNuevo ? 'Agregar' : 'Guardar', clase: 'primario', accion: function () {
+    var p = { id: mv.id, descripcion: $('pmDesc').value, texto: $('pmMonto').value, cuotas: Number($('pmCuotas').value) || 1, categoria: $('pmCat').value,
+      medio: $('pmMedio').value, fecha: $('pmFecha').value || S.hoy, mes: pmMesManual ? $('pmMes').value : '', nota: $('pmNota').value };
+    if (!montoP(p.texto)) { aviso('Revisá el monto', true); return; }
+    guardarMovimiento(p, esNuevo).then(cerrarPanel);
+  } });
+  abrirPanel(esNuevo ? 'Nuevo gasto' : 'Editar gasto', h, botones);
+  var pmMesManual = !!(pre.mes && pre.mes === hoyMes);
+  if (pmMesManual) $('pmMes').value = pre.mes;
+  function ayudaMes() {
+    var auto = mesImpacto($('pmFecha').value || S.hoy, $('pmMedio').value, S.cfg.tarjetaMesSig);
+    if (!pmMesManual) $('pmMes').value = auto;
+    $('pmMesAyuda').textContent = pmMesManual ? 'Elegido a mano' : 'Automático' + (auto !== ($('pmFecha').value || S.hoy).slice(0, 7) ? ' (tarjeta → mes siguiente)' : '');
+  }
+  if (!esNuevo && mv.mes) { pmMesManual = mv.mes !== mesImpacto(mv.fecha, mv.medio, S.cfg.tarjetaMesSig); $('pmMes').value = mv.mes; }
+  $('pmMes').onchange = function () { pmMesManual = true; ayudaMes(); };
+  $('pmFecha').onchange = ayudaMes; $('pmMedio').onchange = ayudaMes;
+  ayudaMes();
+  $('pmDesc').oninput = function () {
+    if (!esNuevo || pre.categoria) return;
+    var c = adivinarP($('pmDesc').value, S.aprendidas, S.palabras);
+    if (cats.indexOf(c) >= 0) $('pmCat').value = c;
+  };
+}
+
+/* ---------- Menú contextual y avisos ---------- */
+function mostrarMenu(x, y, ops) {
+  var m = $('menu'); m.innerHTML = '';
+  ops.forEach(function (o) {
+    if (!o) { m.appendChild(document.createElement('hr')); return; }
+    var b = document.createElement('button'); b.textContent = o[0];
+    b.onclick = function () { m.hidden = true; o[1](); };
+    m.appendChild(b);
+  });
+  while (m.lastChild && m.lastChild.tagName === 'HR') m.removeChild(m.lastChild);
+  m.hidden = false;
+  m.style.left = Math.min(x, window.innerWidth - m.offsetWidth - 8) + 'px';
+  m.style.top = Math.min(y, window.innerHeight - m.offsetHeight - 8) + 'px';
+}
+
+function aviso(texto, error, accion) {
+  var el = document.createElement('div');
+  el.className = 'aviso' + (error ? ' error' : '');
+  var sp = document.createElement('span'); sp.textContent = texto; el.appendChild(sp);
+  if (accion) {
+    var b = document.createElement('button'); b.textContent = 'Deshacer';
+    b.onclick = function () { el.remove(); accion(); };
+    el.appendChild(b);
+  }
+  $('avisos').appendChild(el);
+  setTimeout(function () { el.remove(); }, accion ? 7000 : error ? 6000 : 2800);
+}
+
+/* ---------- Movimientos ---------- */
+function dibujarMovimientos() {
+  var fMes = $('fMes'), fCat = $('fCat');
+  var mesSel = fMes.value || 'todos', catSel = fCat.value || '';
+  var meses = [];
+  S.movimientos.forEach(function (m) { if (m.mes && meses.indexOf(m.mes) < 0) meses.push(m.mes); });
+  if (meses.indexOf(S.mesHoy) < 0) meses.push(S.mesHoy);
+  meses.sort().reverse();
+  fMes.innerHTML = '<option value="todos"' + (mesSel === 'todos' ? ' selected' : '') + '>Todos los meses</option>' + meses.map(function (m) { return '<option value="' + m + '"' + (m === mesSel ? ' selected' : '') + '>' + etiquetaMesP(m) + '</option>'; }).join('');
+  var cats = S.conceptos.filter(function (c) { return c.tipo === 'eventual'; }).map(function (c) { return c.nombre; });
+  fCat.innerHTML = '<option value="">Todas las categorías</option>' + opciones(cats, catSel);
+  var q = normP($('fTxt').value);
+  var filas;
+  if (fMes.value === 'todos') filas = S.movimientos.filter(function (m) { return !catSel || m.categoria === catSel; }).map(function (m) { return { mv: m, importe: m.monto, cuota: 0, cuotas: m.cuotas }; });
+  else filas = movimientosDelMes(S.movimientos, catSel, fMes.value);
+  if (q) filas = filas.filter(function (x) { return normP(x.mv.descripcion + ' ' + x.mv.categoria + ' ' + x.mv.nota).indexOf(q) >= 0; });
+  filas.sort(function (a, b) { return a.mv.fecha < b.mv.fecha ? 1 : -1; });
+  var total = filas.reduce(function (a, x) { return a + x.importe; }, 0);
+  $('fTotal').textContent = filas.length + ' gastos · ' + pesos(total) + (fMes.value === 'todos' ? '' : ' en ' + etiquetaMesP(fMes.value));
+  var h = '<tr><th>Fecha</th><th>Descripción</th><th>Categoría</th><th class="n">' + (fMes.value === 'todos' ? 'Monto' : 'Este mes') + '</th><th class="n">Cuotas</th><th>Medio</th><th>Impacta</th></tr>';
+  if (!filas.length) h += '<tr><td colspan="7" class="vacio">No hay gastos con estos filtros.</td></tr>';
+  filas.forEach(function (x) {
+    var m = x.mv;
+    h += '<tr class="click" data-id="' + esc(m.id) + '"><td>' + esc(m.fecha.split('-').reverse().join('/')) + '</td><td>' + esc(m.descripcion) + '</td><td>' + esc(m.categoria) + '</td>' +
+      '<td class="n">' + pesos(x.importe) + '</td><td class="n">' + (m.cuotas > 1 ? (x.cuota ? x.cuota + '/' : '') + m.cuotas : '—') + '</td><td>' + esc(m.medio || '—') + '</td><td>' + esc(etiquetaMesP(m.mes)) + '</td></tr>';
+  });
+  $('tMov').innerHTML = h;
+  $('tMov').querySelectorAll('tr[data-id]').forEach(function (tr) {
+    tr.onclick = function () { panelMovimiento(S.movimientos.filter(function (m) { return m.id === tr.dataset.id; })[0]); };
+  });
+}
+
+/* ---------- Ajustes ---------- */
+function dibujarConfig() {
+  var h = '<div class="card"><h2>Preferencias</h2><p class="sub">Todo lo demás se configura en cada concepto (clic en su nombre en la planilla).</p>';
+  S.cfgDef.forEach(function (d) {
+    var v = S.config[d.k], id = 'cfg_' + d.k;
+    var campo;
+    if (['cerrarMes', 'confirmarDA', 'tarjetaMesSig'].indexOf(d.k) >= 0) campo = '<select id="' + id + '">' + opciones(['Sí', 'No'], esSiP(v) ? 'Sí' : 'No') + '</select>';
+    else if (d.k === 'dolar') campo = '<select id="' + id + '">' + opciones(['Blue', 'Oficial'], normP(v) === 'oficial' ? 'Oficial' : 'Blue') + '</select>';
+    else campo = '<input id="' + id + '" value="' + esc(v) + '">';
+    h += '<div class="campo"><label for="' + id + '">' + esc(ETIQUETAS_CFG[d.k] || d.k) + '</label>' + campo + '<div class="ayuda">' + esc(d.ayuda) + '</div></div>';
+  });
+  h += '<button class="boton primario" id="bCfg">Guardar preferencias</button></div>';
+
+  h += '<div class="card"><h2>Feriados y días no laborables</h2><p class="sub">Se usan para calcular días hábiles. Se descargan solos; agregá los tuyos (ej. asueto de tu empresa).</p>' +
+    '<div class="filtros-mov"><input type="date" id="ferFecha"><input id="ferNombre" placeholder="Nombre"><button class="boton" id="bFer">Agregar</button></div>' +
+    '<div style="max-height:260px;overflow:auto"><table class="t"><tr><th>Fecha</th><th>Nombre</th><th>Origen</th><th></th></tr>' +
+    S.feriados.filter(function (f) { return f.fecha >= S.hoy.slice(0, 4) + '-01-01'; }).map(function (f) {
+      return '<tr><td>' + esc(f.fecha.split('-').reverse().join('/')) + '</td><td>' + esc(f.nombre) + '</td><td>' + esc(f.origen) + '</td><td class="n"><button class="mini" data-fer="' + esc(f.fecha) + '">✕</button></td></tr>';
+    }).join('') + '</table></div></div>';
+
+  var ult = S.indices.slice(-12).reverse();
+  h += '<div class="card"><h2>Inflación y dólar</h2><p class="sub">INDEC y dólar oficial/blue (promedio mensual). Se actualizan solos cada semana. Inflación esperada: ' + S.inflEsperada + '% mensual.</p>' +
+    '<button class="boton" id="bInd">↻ Actualizar ahora</button><div style="overflow-x:auto;margin-top:10px"><table class="t"><tr><th>Mes</th><th class="n">Inflación</th><th class="n">Oficial</th><th class="n">Blue</th></tr>' +
+    ult.map(function (r) { return '<tr><td>' + esc(etiquetaMesP(r.mes)) + '</td><td class="n">' + (r.inflacion === '' || r.inflacion === null ? '—' : String(r.inflacion).replace('.', ',') + '%') + '</td><td class="n">' + (r.dolar_oficial ? pesos(r.dolar_oficial) : '—') + '</td><td class="n">' + (r.dolar_blue ? pesos(r.dolar_blue) : '—') + '</td></tr>'; }).join('') +
+    '</table></div></div>';
+
+  h += '<div class="card"><h2>Google Calendar</h2><p class="sub">Los conceptos con fecha de vencimiento aparecen en el calendario "' + esc(S.config.calendario || '—') + '". Se sincroniza solo cada mañana.</p><button class="boton" id="bCal">🗓️ Sincronizar ahora</button></div>';
+
+  h += '<div class="card"><h2>Base de datos</h2><p class="sub">Tus datos viven en una planilla de Google Sheets con una hoja por tabla (Conceptos, Valores, Movimientos, Indices, Feriados, Config). Podés abrirla, pero no hace falta.</p>' +
+    '<p><a class="boton" target="_blank" rel="noopener" href="' + esc($('linkDb').href) + '">Abrir la base de datos ↗</a> <button class="boton" id="bHojas">🧹 Buscar hojas que sobran</button></p><div id="hojasSobrantes"></div></div>';
+  $('config').innerHTML = h;
+
+  $('bCfg').onclick = function () {
+    var vals = {};
+    S.cfgDef.forEach(function (d) { vals[d.k] = $('cfg_' + d.k).value; });
+    estadoGuardado('guardando');
+    api('api_guardarConfig', vals).then(function (d) { prepararDatos(d); estadoGuardado('ok'); aviso('✓ Preferencias guardadas'); dibujarConfig(); })
+      .catch(function (e) { estadoGuardado('error'); aviso(e.message, true); });
+  };
+  var guardarFeriados = function (lista) {
+    api('api_guardarFeriados', lista).then(function (r) { S.feriados = r.feriados; S.venc = r.venc; dibujarConfig(); aviso('✓ Feriados guardados'); }).catch(function (e) { aviso(e.message, true); });
+  };
+  $('bFer').onclick = function () {
+    var f = $('ferFecha').value; if (!f) return;
+    guardarFeriados(S.feriados.concat([{ fecha: f, nombre: $('ferNombre').value || 'No laborable', origen: 'manual' }]));
+  };
+  $('config').querySelectorAll('[data-fer]').forEach(function (b) {
+    b.onclick = function () { guardarFeriados(S.feriados.filter(function (f) { return f.fecha !== b.dataset.fer; })); };
+  });
+  $('bInd').onclick = function () {
+    $('bInd').disabled = true; $('bInd').textContent = 'Descargando…';
+    api('api_actualizarIndices').then(function (r) { S.indices = r.indices; aviso(r.resultado.errores.length ? 'No se pudo descargar: ' + r.resultado.errores.join(', ') : '✓ Actualizado'); dibujarConfig(); })
+      .catch(function (e) { aviso(e.message, true); dibujarConfig(); });
+  };
+  $('bCal').onclick = function () {
+    $('bCal').disabled = true;
+    api('api_sincronizarCalendario').then(function (r) { aviso(r.omitido ? 'Calendario desactivado' : '✓ ' + r.creados + ' creados · ' + r.actualizados + ' actualizados · ' + r.borrados + ' borrados'); $('bCal').disabled = false; })
+      .catch(function (e) { aviso(e.message, true); $('bCal').disabled = false; });
+  };
+  $('bHojas').onclick = function () { mostrarHojasSobrantes($('hojasSobrantes')); };
+}
+
+function esSiP(v) { var s = normP(v); return s === 'si' || s === 'true' || s === '1'; }
+
+function mostrarHojasSobrantes(cont, alTerminar) {
+  cont.innerHTML = '<p class="sub">Buscando…</p>';
+  api('api_hojasSobrantes').then(function (hojas) {
+    if (!hojas.length) { cont.innerHTML = '<p class="sub">✓ La planilla está limpia: solo quedan las tablas de la base de datos.</p>'; if (alTerminar) alTerminar(); return; }
+    cont.innerHTML = '<p style="margin:8px 0">Estas hojas ya no se usan. Antes de borrar se guarda una <b>copia completa</b> del archivo en tu Drive.</p><ul class="hojas">' +
+      hojas.map(function (x, i) { return '<li><input type="checkbox" id="hj' + i + '" checked data-hoja="' + esc(x.nombre) + '"><label for="hj' + i + '">' + esc(x.nombre) + '</label><span>' + x.filas + ' filas</span></li>'; }).join('') +
+      '</ul><button class="boton peligro" id="bBorrarHojas">🗑️ Borrar las seleccionadas</button> ' + (alTerminar ? '<button class="boton" id="bOmitirHojas">Dejarlas por ahora</button>' : '');
+    $('bBorrarHojas').onclick = function () {
+      var nombres = Array.prototype.map.call(cont.querySelectorAll('input[data-hoja]:checked'), function (x) { return x.dataset.hoja; });
+      if (!nombres.length) return;
+      $('bBorrarHojas').disabled = true; $('bBorrarHojas').textContent = 'Haciendo respaldo y borrando…';
+      api('api_borrarHojas', nombres).then(function (r) {
+        cont.innerHTML = '<p>✓ Borradas: ' + esc(r.borradas.join(', ')) + '.</p><p class="sub">Respaldo completo: <a target="_blank" rel="noopener" href="' + esc(r.respaldo) + '">abrir copia</a>.</p>';
+        if (alTerminar) alTerminar();
+      }).catch(function (e) { aviso(e.message, true); $('bBorrarHojas').disabled = false; });
+    };
+    if (alTerminar) $('bOmitirHojas').onclick = function () { cont.innerHTML = ''; alTerminar(); };
+  }).catch(function (e) { cont.innerHTML = '<p class="sub">' + esc(e.message) + '</p>'; });
+}
+
+/* ---------- Instalación ---------- */
+function mostrarInstalacion(estado) {
+  $('cargando').hidden = true;
+  ['planilla', 'movimientos', 'tablero', 'config'].forEach(function (x) { $('v-' + x).hidden = true; });
+  $('v-instalar').hidden = false;
+  var pasos = [
+    ['respaldo', 'Copia de respaldo', 'Se guarda una copia completa de tu archivo en Drive.'],
+    ['migrar', 'Base de datos', 'Se crean las tablas y se importa ' + estado.fuente.descripcion + '.'],
+    ['indices', 'Feriados, inflación y dólar', 'Se descargan de fuentes públicas.'],
+    ['automatizaciones', 'Automatizaciones', 'Tarea diaria: cierre de mes, débitos automáticos, calendario.'],
+    ['calendario', 'Google Calendar', 'Se crean los vencimientos del mes.']
+  ];
+  $('bienvenida').innerHTML = '<h1>Bienvenido a Finanzas 👋</h1><p class="lead">Tu planilla se convierte en una app: la editás como un Excel, pero con proyección automática de precios, vencimientos, cuotas y un dashboard. Google Sheets queda solo como base de datos.</p>' +
+    '<div class="card"><ul class="pasos">' + pasos.map(function (p) { return '<li id="paso-' + p[0] + '"><div class="ic">•</div><div class="tx"><b>' + p[1] + '</b><span>' + esc(p[2]) + '</span></div></li>'; }).join('') + '</ul>' +
+    '<button class="boton primario" id="bInstalar" style="font-size:15px;padding:10px 18px">Instalar</button> <span class="sub" style="margin-left:8px">Tarda alrededor de un minuto.</span></div><div id="postInstalar"></div>';
+  $('bInstalar').onclick = function () {
+    $('bInstalar').disabled = true; $('bInstalar').textContent = 'Instalando…';
+    var i = 0;
+    var siguiente = function () {
+      if (i >= pasos.length) return terminar();
+      var p = pasos[i++], li = $('paso-' + p[0]);
+      li.className = 'run'; li.querySelector('.ic').textContent = '…';
+      api('api_instalar', p[0]).then(function (r) {
+        li.className = r.ok ? 'ok' : 'err'; li.querySelector('.ic').textContent = r.ok ? '✓' : '!';
+        li.querySelector('.tx span').textContent = r.detalle || '';
+        siguiente();
+      }).catch(function (e) {
+        li.className = 'err'; li.querySelector('.ic').textContent = '!';
+        li.querySelector('.tx span').textContent = e.message;
+        if (p[0] === 'respaldo' || p[0] === 'migrar') { $('bInstalar').disabled = false; $('bInstalar').textContent = 'Reintentar'; return; }
+        siguiente();
+      });
+    };
+    siguiente();
+  };
+  function terminar() {
+    $('bInstalar').hidden = true;
+    var cont = $('postInstalar');
+    cont.innerHTML = '<div class="card"><h2>Limpieza de la planilla</h2><div id="hojasInst"></div></div>';
+    mostrarHojasSobrantes($('hojasInst'), function () {
+      cont.insertAdjacentHTML('beforeend', '<p><button class="boton primario" id="bEntrar" style="font-size:15px;padding:10px 18px">Abrir mi planilla →</button></p>');
+      $('bEntrar').onclick = function () { $('v-instalar').hidden = true; $('cargando').hidden = false; S.vista = 'planilla'; cargarDatos(); };
+    });
+  }
+}
+
+/* ---------- Arranque ---------- */
+document.querySelectorAll('#navApp button').forEach(function (b) { b.onclick = function () { mostrarVista(b.dataset.v); }; });
+$('panelCerrar').onclick = cerrarPanel;
+$('velo').onclick = cerrarPanel;
+document.addEventListener('keydown', function (e) {
+  if (e.key === 'Escape') { if ($('panel').classList.contains('abierto')) cerrarPanel(); $('menu').hidden = true; }
+});
+document.addEventListener('mousedown', function (e) { if (!e.target.closest('#menu')) $('menu').hidden = true; });
+$('rapida').addEventListener('input', function () { candidatoElegido = 0; forzarMov = false; actualizarPrevia(); });
+$('rapida').addEventListener('keydown', function (e) {
+  if (e.key === 'Enter') { e.preventDefault(); guardarRapida(); }
+  else if (e.key === 'Escape') { $('rapida').value = ''; $('previa').hidden = true; $('grilla').focus(); }
+});
+$('rapida').addEventListener('blur', function () { setTimeout(function () { if (document.activeElement !== $('rapida')) $('previa').hidden = true; }, 150); });
+$('rapida').addEventListener('focus', function () { if ($('rapida').value.trim()) actualizarPrevia(); });
+$('bNuevoMov').onclick = function () { panelMovimiento(null); };
+['fMes', 'fCat'].forEach(function (id) { $(id).onchange = dibujarMovimientos; });
+$('fTxt').oninput = dibujarMovimientos;
+iniciarGrilla();
+iniciar();
+</script>

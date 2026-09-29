@@ -27,13 +27,8 @@ test('cuentas se conservan como fórmula', () => {
   assert.strictEqual(G.parsearMonto('1+'), null);
 });
 
-test('fórmulas aritméticas y conversión R1C1', () => {
+test('fórmulas aritméticas', () => {
   assert.ok(G.esFormulaAritmetica('=10615+178223'));
   assert.ok(G.esFormulaAritmetica('= 17200/2'));
   assert.ok(!G.esFormulaAritmetica('=AK8*20%'));
-  assert.strictEqual(G.r1c1aA1('=R[-3]C*20%', 12, 8), '=H9*20%');
-  assert.strictEqual(G.r1c1aA1('=RC[-1]+R2C', 10, 3), '=B10+C$2');
-  assert.strictEqual(G.r1c1aA1('=SUM(RC7:RC18)', 5, 19), '=SUM($G5:$R5)');
-  assert.strictEqual(G.r1c1aA1('=ROUND(RC[-1],0)', 4, 4), '=ROUND(C4,0)');
-  assert.strictEqual(G.r1c1aA1('="RC"&RC[-1]', 4, 4), '="RC"&C4');
 });

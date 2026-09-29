@@ -158,19 +158,14 @@ function fechaCorta_(d) {
 /** Sugerencias para el desplegable de la columna Vence. */
 var REGLAS_SUGERIDAS = ['1er hábil', '2do hábil', '5to hábil', '10', '10 hábil', '15', '15 hábil', '20', 'último hábil', 'anteúltimo hábil', 'último día'];
 
-/* ---------- Feriados (tabla en hoja Config) ---------- */
+/* ---------- Feriados (tabla Feriados) ---------- */
 
 var FERIADOS_CACHE_ = null;
+/** @return {Object} mapa 'YYYY-MM-DD' → nombre */
 function leerFeriados() {
   if (FERIADOS_CACHE_) return FERIADOS_CACHE_;
   var mapa = {};
-  var sh = hoja_(FZ.HOJA_CFG);
-  if (sh && sh.getLastRow() > CFG_FILA_FERIADOS + 1) {
-    var vals = sh.getRange(CFG_FILA_FERIADOS + 2, 1, sh.getLastRow() - CFG_FILA_FERIADOS - 1, 2).getValues();
-    vals.forEach(function (r) {
-      if (r[0] instanceof Date) mapa[claveDia_(r[0])] = String(r[1] || 'Feriado');
-    });
-  }
+  leerTabla(FZ.T.FER).forEach(function (r) { if (r.fecha) mapa[String(r.fecha)] = String(r.nombre || 'Feriado'); });
   FERIADOS_CACHE_ = mapa;
   return mapa;
 }

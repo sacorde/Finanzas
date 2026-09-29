@@ -52,6 +52,21 @@ jobs:
           printf '%s' "$CLASPRC_JSON" > ~/.clasprc.json
           printf '{"scriptId":"%s","rootDir":"apps-script"}' "$SCRIPT_ID" > .clasp.json
 
+      - name: URL de la app
+        # La app se sirve desde la implementación de prueba (@HEAD): siempre muestra el último código,
+        # sin crear versiones. La URL se guarda en UrlWeb.js para el menú de la planilla.
+        run: |
+          DEPS=$(npx --yes @google/clasp@2.4.2 deployments 2>&1 || true)
+          echo "$DEPS"
+          HEAD_ID=$(echo "$DEPS" | grep '@HEAD' | grep -o 'AKfy[A-Za-z0-9_-]*' | head -1)
+          if [ -n "$HEAD_ID" ]; then
+            URL="https://script.google.com/macros/s/$HEAD_ID/dev"
+            echo "var FZ_URL_WEB = '$URL';" > apps-script/UrlWeb.js
+            echo "URL_APP=$URL" >> "$GITHUB_ENV"
+          else
+            echo "::warning::No encontré la implementación @HEAD; la URL se muestra en el editor (Implementar → Implementaciones de prueba)."
+          fi
+
       - name: Subir código
         # clasp a veces imprime el error de Google y aun así sale con código 0: revisamos la salida.
         run: |
@@ -62,6 +77,12 @@ jobs:
             exit 1
           fi
 
+      - name: Resumen
+        if: success()
+        run: |
+          echo "## ✅ Código subido a Apps Script" >> "$GITHUB_STEP_SUMMARY"
+          if [ -n "$URL_APP" ]; then echo "🔗 **App:** $URL_APP" >> "$GITHUB_STEP_SUMMARY"; echo "URL de la app: $URL_APP"; fi
+
       - name: Actualizar app web
         env:
           DEPLOYMENT_ID: ${{ secrets.DEPLOYMENT_ID }}
@@ -70,4 +91,4 @@ jobs:
 
       - name: Limpiar credenciales
         if: always()
-        run: rm -f ~/.clasprc.json .clasp.json push.log
+        run: rm -f ~/.clasprc.json .clasp.json push.log apps-script/UrlWeb.js
