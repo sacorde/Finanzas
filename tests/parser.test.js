@@ -71,17 +71,39 @@ test('categoría nueva para conceptos de versiones anteriores', () => {
   assert.strictEqual(m('Gastos fijos', 'Otros fijos', 'Cosa rara'), 'Servicios');
 });
 
-test('junto al nombre: día de pago del mes y medio de pago', () => {
-  const r = (c) => P.resumenConcepto(Object.assign({ tipo: 'fijo', proyeccion: 'Repetir' }, c));
-  assert.strictEqual(r({ vence: '1er hábil', medio: 'Débito automático' }), 'Déb. aut.');
-  assert.strictEqual(r({ medio: 'Tarjeta VISA', proyeccion: 'Promedio 3 meses' }), 'VISA · prom.');
-  assert.strictEqual(r({}), '');
-  assert.strictEqual(r({ tipo: 'eventual', medio: 'Efectivo', proyeccion: 'No proyectar' }), 'Efectivo');
+test('junto al nombre: día de pago del mes y medio de pago abreviado', () => {
+  assert.deepStrictEqual(['Débito automático', 'Transferencia', 'Efectivo', 'Mercado Pago', 'Tarjeta VISA', 'Tarjeta AMEX', ''].map(P.abrevMedio), ['DA', 'T', 'EF', 'MP', 'VISA', 'AMEX', '']);
+  assert.strictEqual(P.resumenConcepto({ tipo: 'fijo', proyeccion: 'Promedio 3 meses' }), 'prom.');
+  assert.strictEqual(P.resumenConcepto({ tipo: 'fijo', proyeccion: 'Repetir' }), '');
+  assert.strictEqual(P.resumenConcepto({ tipo: 'eventual', proyeccion: 'No proyectar' }), '');
   const venc = { a: { '2026-02': '2026-02-28', '2026-03': '2026-03-31' } };
   assert.strictEqual(P.diaDePago(venc, 'a', '2026-02'), 28);
   assert.strictEqual(P.diaDePago(venc, 'a', '2026-03'), 31);
   assert.strictEqual(P.diaDePago(venc, 'a', '2026-04'), null);
   assert.strictEqual(P.diaDePago(venc, 'b', '2026-02'), null);
+});
+
+test('selector de vencimiento: día 1–28, último / anteúltimo, hábil', () => {
+  const r = (dia, fin, habil) => P.reglaDesdeSelector({ dia, fin, habil });
+  assert.strictEqual(r(15, '', false), '15');
+  assert.strictEqual(r('10', '', true), '10 hábil');
+  assert.strictEqual(r(31, '', false), '28', 'máximo 28');
+  assert.strictEqual(r('', '', true), '', 'sin día no hay vencimiento');
+  assert.strictEqual(r(5, 'ultimo', false), 'último día', 'último gana sobre el día');
+  assert.strictEqual(r('', 'ultimo', true), 'último hábil');
+  assert.strictEqual(r('', 'anteultimo', false), 'anteúltimo día');
+  assert.strictEqual(r('', 'anteultimo', true), 'anteúltimo hábil');
+  const s = (t) => ({ ...P.selectorDesdeRegla(t) });
+  assert.deepStrictEqual(s('15'), { dia: 15, fin: '', habil: false });
+  assert.deepStrictEqual(s('10 hábil'), { dia: 10, fin: '', habil: true });
+  assert.deepStrictEqual(s('1er hábil'), { dia: 1, fin: '', habil: true });
+  assert.deepStrictEqual(s('último día'), { dia: '', fin: 'ultimo', habil: false });
+  assert.deepStrictEqual(s('anteúltimo hábil'), { dia: '', fin: 'anteultimo', habil: true });
+  assert.deepStrictEqual(s(''), { dia: '', fin: '', habil: false });
+  assert.ok(s('primer lunes').otra);
+  assert.ok(s('30').otra, 'día mayor a 28 no entra en el selector');
+  // Todo lo que arma el selector lo entiende el servidor
+  for (const t of [r(1, '', true), r(28, '', false), r('', 'ultimo', true), r('', 'anteultimo', false)]) assert.ok(!G.parsearRegla(t).error, t);
 });
 
 test('montos: cliente y servidor coinciden', () => {

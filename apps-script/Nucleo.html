@@ -196,16 +196,42 @@ function construirFilas(conceptos, categorias, opts) {
   return filas;
 }
 
-var ABREV_MEDIO = { 'debito automatico': 'Déb. aut.', transferencia: 'Transf.', efectivo: 'Efectivo', 'mercado pago': 'MP' };
+var ABREV_MEDIO = { 'debito automatico': 'DA', transferencia: 'T', efectivo: 'EF', 'mercado pago': 'MP' };
 
-/** Resumen corto de medio de pago y proyección, para mostrar junto al nombre (el día de pago va aparte). */
+/** Medio de pago abreviado para mostrar junto al nombre: DA, T, EF, MP, VISA, AMEX… */
+function abrevMedio(medio) {
+  var m = String(medio || '').trim();
+  if (!m) return '';
+  return ABREV_MEDIO[normP(m)] || m.replace(/^tarjeta\s+/i, '');
+}
+
+/** Indicación de cómo se completan los meses futuros (solo si no es "Repetir"). */
 function resumenConcepto(c) {
-  var partes = [];
-  var m = String(c.medio || '').trim();
-  if (m) partes.push(ABREV_MEDIO[normP(m)] || m.replace(/^tarjeta\s+/i, ''));
-  if (c.tipo === 'fijo' && c.proyeccion === 'Promedio 3 meses') partes.push('prom.');
-  else if (c.tipo === 'fijo' && c.proyeccion === 'Ajustar por inflación') partes.push('+infl.');
-  return partes.join(' · ');
+  if (c.tipo !== 'fijo') return '';
+  return c.proyeccion === 'Promedio 3 meses' ? 'prom.' : c.proyeccion === 'Ajustar por inflación' ? '+infl.' : '';
+}
+
+/**
+ * Selector de vencimiento del panel → regla en palabras (la que entiende el servidor).
+ * @param {{dia:number|string, fin:''|'ultimo'|'anteultimo', habil:boolean}} v
+ */
+function reglaDesdeSelector(v) {
+  if (v.fin === 'ultimo') return v.habil ? 'último hábil' : 'último día';
+  if (v.fin === 'anteultimo') return v.habil ? 'anteúltimo hábil' : 'anteúltimo día';
+  var d = Number(v.dia);
+  if (!d || d < 1) return '';
+  d = Math.min(28, Math.round(d));
+  return d + (v.habil ? ' hábil' : '');
+}
+
+/** Regla guardada → valores del selector. {otra:true} si la regla no entra en el selector (ej. "primer lunes"). */
+function selectorDesdeRegla(texto) {
+  var t = normP(texto), m;
+  if (!t) return { dia: '', fin: '', habil: false };
+  if ((m = /^(\d{1,2})( habil)?$/.exec(t)) && Number(m[1]) >= 1 && Number(m[1]) <= 28) return { dia: Number(m[1]), fin: '', habil: !!m[2] };
+  if (/^(1|1er|1ro|primer|primero) (dia )?habil$/.test(t)) return { dia: 1, fin: '', habil: true };
+  if ((m = /^(ultimo|anteultimo) (dia|habil)$/.exec(t))) return { dia: '', fin: m[1], habil: m[2] === 'habil' };
+  return { dia: '', fin: '', habil: false, otra: true };
 }
 
 /** Día del mes en que se paga el concepto ese mes (varía: 28/30/31, hábiles, feriados), o null. */

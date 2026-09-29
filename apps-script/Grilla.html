@@ -118,6 +118,7 @@ function dibujarGrilla() {
     if (f.t === 'cat') {
       var cerrada = S.colapsadas[f.key];
       h.push('<tr class="cat' + (cerrada ? ' cerrado' : '') + '" data-key="' + esc(f.key) + '" style="--cat:' + catColor(f.cat) + '"><td class="n" data-f="' + r + '" data-k="0"><span class="caret" title="' + (cerrada ? 'Mostrar' : 'Ocultar') + ' filas">▾</span><i class="punto"></i><span class="tn">' + esc(f.cat.nombre) + '</span>' +
+        '<button class="lapiz" data-editar-cat="1" title="Editar la categoría ' + esc(f.cat.nombre) + '" aria-label="Editar la categoría ' + esc(f.cat.nombre) + '">✎</button>' +
         '<button class="mas" data-mas="fila" title="Agregar una fila en ' + esc(f.cat.nombre) + '">+</button><span class="cuenta-filas">' + f.conceptos.length + '</span></td>');
       celdas();
       h.push('</tr>');
@@ -135,7 +136,8 @@ function dibujarGrilla() {
       h.push('<tr class="item' + (c0.tipo === 'eventual' ? ' ev' : '') + '" style="--cat:' + catColor(f.cat) + '"><td class="n" data-f="' + r + '" data-k="0" title="' + esc(titulo) + '">' +
         '<button class="lapiz" data-editar="1" title="Editar ' + esc(c0.nombre) + '" aria-label="Editar ' + esc(c0.nombre) + '">✎</button>' +
         (meta ? '<span class="meta">' + esc(meta) + '</span>' : '') +
-        '<span class="tn">' + esc(c0.nombre) + '</span>' + (dia ? '<span class="dia">(' + dia + ')</span>' : '') + '</td>');
+        '<span class="tn">' + esc(c0.nombre) + '</span>' + (dia ? '<span class="dia">(' + dia + ')</span>' : '') +
+        (c0.medio ? '<span class="dia medio">(' + esc(abrevMedio(c0.medio)) + ')</span>' : '') + '</td>');
       G.cols.forEach(function (c, k) {
         if (c.t === 'nombre') return;
         if (c.t === 'tot') { h.push('<td class="t" data-f="' + r + '" data-k="' + k + '">' + fmtN(valorFilaCol(f, c)) + '</td>'); return; }
@@ -365,7 +367,7 @@ function pegar(e) {
 function iniciarGrilla() {
   var cont = $('grilla');
   cont.addEventListener('mousedown', function (e) {
-    if (e.target.closest('.mas') || e.target.closest('[data-editar]')) return;
+    if (e.target.closest('.mas') || e.target.closest('.lapiz')) return;
     var el = e.target.closest('[data-k][data-f]');
     if (!el || e.button === 2 && G.sel && el.classList.contains('sel')) return;
     var r = Number(el.dataset.f), k = Number(el.dataset.k);
@@ -382,7 +384,7 @@ function iniciarGrilla() {
     pintarSeleccion();
   });
   document.addEventListener('mouseup', function () { G.arrastrando = false; });
-  cont.addEventListener('dblclick', function (e) { if (e.target.closest('[data-k][data-f]') && !e.target.closest('.mas') && !e.target.closest('[data-editar]')) editar(); });
+  cont.addEventListener('dblclick', function (e) { if (e.target.closest('[data-k][data-f]') && !e.target.closest('.mas') && !e.target.closest('.lapiz')) editar(); });
   cont.addEventListener('click', function (e) {
     var mas = e.target.closest('.mas');
     if (mas) {
@@ -391,6 +393,8 @@ function iniciarGrilla() {
       nuevaFila(fr.cat.nombre);
       return;
     }
+    var lapizCat = e.target.closest('[data-editar-cat]');
+    if (lapizCat) { abrirPanelCategoria(G.filas[Number(lapizCat.closest('[data-f]').dataset.f)].cat); return; }
     var lapiz = e.target.closest('[data-editar]');
     if (lapiz) {
       var rl = Number(lapiz.closest('[data-f]').dataset.f);
@@ -426,6 +430,7 @@ function iniciarGrilla() {
     if (mapa[e.key]) { e.preventDefault(); mover(mapa[e.key][0], mapa[e.key][1], e.shiftKey); return; }
     if (e.key === 'Tab') { e.preventDefault(); mover(0, e.shiftKey ? -1 : 1); return; }
     if (e.key === 'F4' && G.sel && G.filas[G.sel.r2] && G.filas[G.sel.r2].t === 'item') { e.preventDefault(); abrirPanel(G.filas[G.sel.r2].c); return; }
+    if (e.key === 'F4' && G.sel && G.filas[G.sel.r2] && G.filas[G.sel.r2].t === 'cat') { e.preventDefault(); abrirPanelCategoria(G.filas[G.sel.r2].cat); return; }
     if (e.key === 'Enter' || e.key === 'F2') { e.preventDefault(); editar(); return; }
     if (e.key === 'Delete' || e.key === 'Backspace') { e.preventDefault(); borrarSeleccion(); return; }
     if (e.key === 'Escape') { G.sel = null; pintarSeleccion(); return; }
@@ -473,6 +478,7 @@ function menuCelda(x, y) {
     ops.push(['🗑️ Eliminar fila "' + c.nombre + '"', function () { eliminarFila(c); }]);
   } else if (f.t === 'cat') {
     var nombre = f.cat.nombre;
+    ops.push(['✎ Editar categoría…', function () { abrirPanelCategoria(f.cat); }]);
     ops.push(['＋ Agregar fila en ' + nombre, function () { nuevaFila(nombre); }]);
     ops.push(['✎ Renombrar', function () { G.sel = { r: G.sel.r2, k: 0, r2: G.sel.r2, k2: 0 }; editar(); }]);
     ops.push(['🎨 Color ▸', function () {

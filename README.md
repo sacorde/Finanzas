@@ -4,7 +4,7 @@ App web de finanzas personales que se usa **como un Excel** y guarda todo en **G
 
 ![Planilla](docs/img/planilla.png)
 
-- **Planilla tipo Excel, todo en celdas.** Conceptos en filas y meses en columnas. Categorías, nombres y montos se escriben en la grilla; al lado del nombre se ve el día de pago del mes elegido entre paréntesis, ej. *Luz (1)*, *Alquiler (28)* en febrero y *(31)* en marzo. Acepta cuentas (`=10615+178223`), copiar y pegar, deshacer, y muestra la suma de la selección.
+- **Planilla tipo Excel, todo en celdas.** Conceptos en filas y meses en columnas. Categorías, nombres y montos se escriben en la grilla; al lado del nombre se ve el día de pago del mes elegido y el medio de pago entre paréntesis, ej. *Luz (1) (DA)*, *Alquiler (28) (T)* en febrero y *(31)* en marzo. DA = débito automático, T = transferencia, EF = efectivo, MP = Mercado Pago. Acepta cuentas (`=10615+178223`), copiar y pegar, deshacer, y muestra la suma de la selección.
 - **Cualquier mes.** Con el selector ‹ mes › vas a cualquier mes pasado o futuro para cargarlo o corregirlo.
 - **Categorías con color, sin subcategorías.** Ingresos (Salario, Aguinaldo, Bonos, Otros), Vivienda, Servicios, Suscripciones, Transporte, Supermercado, Préstamos, Ahorro e Inversión y Eventuales. Cada una tiene su color y un **+** al lado del nombre para agregar una fila.
 - **Arrastre de precios.** Si cargás un aumento en septiembre, los meses siguientes se actualizan solos. Lo que cargás vos se ve en negro; lo que estima el sistema, en *gris itálica*.
@@ -70,7 +70,8 @@ Todo se agrega y se modifica en las celdas:
 | Agregar una fila | **+** al lado del nombre de la categoría: aparece una fila nueva, escribís el nombre y Enter. |
 | Agregar una categoría | **+ categoría** al final de la planilla, o clic derecho sobre una categoría. |
 | Renombrar | Escribí sobre el nombre (fila o categoría). |
-| Editar un concepto | Lápiz **✎** junto al nombre (o F4, o clic derecho → Editar): se abre un panel a la derecha con nombre, categoría, monto del mes, vencimiento (con las fechas que resultan), medio de pago y meses futuros. |
+| Editar un concepto | Lápiz **✎** junto al nombre (o F4, o clic derecho → Editar): se abre un panel a la derecha con nombre, categoría, monto del mes, vencimiento (día del 1 al 28, o último / anteúltimo día, y si es hábil; muestra las fechas que resultan), medio de pago y meses futuros. |
+| Editar una categoría | Lápiz **✎** junto al nombre de la categoría: nombre, color, si suma como ingreso, gasto o ahorro, y eliminar. |
 | Editar | Doble clic, Enter o F2. |
 | Moverse | Flechas, Tab, clic. Shift + flechas o arrastrar para seleccionar un rango. |
 | Borrar un monto | Supr. En un mes futuro vuelve al estimado automático. Para "no se paga", escribí `0`. |

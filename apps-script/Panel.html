@@ -1,59 +1,95 @@
 <script>
-/* Finanzas · Panel lateral para editar un concepto (se abre con el lápiz ✎, F4 o clic derecho → Editar).
- * Nombre, categoría, vencimiento (con las fechas que resultan), medio de pago, meses futuros y el monto del mes elegido. */
+/* Finanzas · Panel lateral de edición (se abre con el lápiz ✎, F4 o clic derecho → Editar).
+ *  - Concepto: nombre, categoría, monto del mes elegido, vencimiento (día 1–28, último / anteúltimo día,
+ *    hábil o no, con las fechas que resultan), medio de pago y meses futuros.
+ *  - Categoría: nombre, color, cómo suma (ingreso / gasto / ahorro) y eliminar. */
 var AYUDA_PROY = {
   'Repetir': 'Los meses futuros repiten el último monto cargado.',
   'Promedio 3 meses': 'Los meses futuros usan el promedio de los últimos 3 meses cargados.',
   'Ajustar por inflación': 'Los meses futuros suben con la inflación esperada.',
   'No proyectar': 'Solo cuenta lo que cargues a mano (aguinaldo, bonos, gastos variables).'
 };
-var PANEL = { c: null, timer: null, vence: null };
+var CLASES_CAT = [['I', 'Ingreso'], ['G', 'Gasto'], ['A', 'Ahorro']];
+var PANEL = { modo: null, c: null, cat: null, timer: null, vence: null, tocado: false, color: '', clase: '' };
 
 /** Monto para mostrar en el panel: la cuenta ("=100+50") o el número con separador de miles. */
 function montoPanel(v) {
   if (!v) return '';
-  return v.c ? '=' + v.c : Number(v.m).toLocaleString('es-AR', { maximumFractionDigits: 2 });
+  return v.c && /[-+*/()%]/.test(v.c.slice(1)) ? '=' + v.c : Number(v.m).toLocaleString('es-AR', { maximumFractionDigits: 2 });
 }
 
-function abrirPanel(c) {
+function mostrarPanel(color, titulo, sub, html) {
   var p = $('panel');
-  PANEL.c = c; PANEL.vence = null;
+  p.style.setProperty('--cat', color);
+  $('pTitulo').textContent = titulo;
+  $('pSub').textContent = sub;
+  $('pCuerpo').innerHTML = html;
+  p.hidden = false;
+  document.body.classList.add('con-panel');
+}
+
+/* ---------- Concepto ---------- */
+function abrirPanel(c) {
+  clearTimeout(PANEL.timer);
+  PANEL = { modo: 'concepto', c: c, cat: null, timer: null, vence: null, tocado: false };
   var fijo = c.tipo === 'fijo';
-  var cat = buscarCat(c.categoria);
   var cats = S.categorias.filter(function (k) { return k.tipo === c.tipo; }).sort(function (a, b) { return a.orden - b.orden; });
   var v = celdaDe(c, S.mesFoco);
-  p.style.setProperty('--cat', catColor(cat));
-  $('pTitulo').textContent = c.nombre;
-  $('pSub').textContent = c.categoria + ' · ' + (fijo ? 'se repite todos los meses' : 'gasto eventual');
   var h = [];
   h.push('<label class="campo-p">Nombre<input id="pNombre" autocomplete="off" value="' + esc(c.nombre) + '"></label>');
   h.push('<label class="campo-p">Categoría<select id="pCat">' + cats.map(function (k) { return '<option' + (k.nombre === c.categoria ? ' selected' : '') + '>' + esc(k.nombre) + '</option>'; }).join('') + '</select></label>');
   h.push('<label class="campo-p">Monto de ' + esc(etiquetaMesP(S.mesFoco).toLowerCase()) + '<input id="pMonto" class="num" autocomplete="off" inputmode="decimal" placeholder="Vacío" value="' + esc(montoPanel(v)) + '">' +
     '<span class="ayuda-p">' + (v ? (v.e ? 'Estimado por el sistema: si lo cambiás queda confirmado.' : 'Cargado por vos.') : 'Acepta cuentas: 1500+300, 150k, 12000*3.') + '</span></label>');
   if (fijo) {
-    h.push('<label class="campo-p">Vence<input id="pVence" list="dlVence" autocomplete="off" placeholder="10 · 10 hábil · 1er hábil · último día" value="' + esc(c.vence) + '">' +
-      '<span class="ayuda-p" id="pVenceInfo"></span></label>');
+    var sel = selectorDesdeRegla(c.vence);
+    h.push('<div class="campo-p">Vence' +
+      '<div class="vence-sel">' +
+        '<label class="dia-sel"><span>Día</span><input id="pDia" type="number" min="1" max="28" step="1" inputmode="numeric" placeholder="—" value="' + esc(sel.dia) + '"' + (sel.fin ? ' disabled' : '') + '></label>' +
+        '<label class="check"><input type="checkbox" id="pUlt"' + (sel.fin === 'ultimo' ? ' checked' : '') + '> Último día</label>' +
+        '<label class="check"><input type="checkbox" id="pAnt"' + (sel.fin === 'anteultimo' ? ' checked' : '') + '> Anteúltimo día</label>' +
+      '</div>' +
+      '<label class="check habil"><input type="checkbox" id="pHabil"' + (sel.habil ? ' checked' : '') + '> <span><b>Hábil</b> <span class="ayuda-p" id="pHabilInfo"></span></span></label>' +
+      (sel.otra ? '<span class="ayuda-p aviso-p">Regla actual: <b>' + esc(c.vence) + '</b>. Se mantiene mientras no elijas otra.</span>' : '') +
+      '<span class="ayuda-p" id="pVenceInfo"></span></div>');
   }
-  h.push('<label class="campo-p">Medio de pago<input id="pMedio" list="dlMedios" autocomplete="off" placeholder="Débito automático, Tarjeta VISA…" value="' + esc(c.medio) + '">' +
-    (fijo ? '<span class="ayuda-p">Con débito automático, el monto se confirma solo el día del vencimiento.</span>' : '') + '</label>');
+  h.push('<label class="campo-p">Medio de pago<input id="pMedio" list="dlMedios" autocomplete="off" placeholder="Débito automático, Transferencia, Tarjeta VISA…" value="' + esc(c.medio) + '">' +
+    '<span class="ayuda-p">Se muestra junto al nombre: Débito automático (DA), Transferencia (T), Efectivo (EF), Mercado Pago (MP), tarjetas (VISA, AMEX…).' +
+    (fijo ? ' Con débito automático, el monto se confirma solo el día del vencimiento.' : '') + '</span></label>');
   if (fijo) {
     h.push('<label class="campo-p">Meses futuros<select id="pProy">' + S.proyecciones.map(function (x) { return '<option' + (x === c.proyeccion ? ' selected' : '') + '>' + esc(x) + '</option>'; }).join('') + '</select>' +
       '<span class="ayuda-p" id="pProyInfo">' + esc(AYUDA_PROY[c.proyeccion] || '') + '</span></label>');
   }
-  $('pCuerpo').innerHTML = h.join('');
-  p.hidden = false;
-  document.body.classList.add('con-panel');
+  mostrarPanel(catColor(buscarCat(c.categoria)), c.nombre, c.categoria + ' · ' + (fijo ? 'se repite todos los meses' : 'gasto eventual'), h.join(''));
+  $('pEliminar').title = 'Eliminar la fila y sus montos';
   if (fijo) {
+    textoHabil();
     mostrarFechasVence(c.vence ? { fechas: fechasGuardadas(c) } : { fechas: [] });
-    $('pVence').addEventListener('input', function () {
-      clearTimeout(PANEL.timer);
-      var txt = $('pVence').value.trim();
-      PANEL.timer = setTimeout(function () { probarVence(txt); }, 350);
+    var cambio = function () { PANEL.tocado = true; textoHabil(); clearTimeout(PANEL.timer); PANEL.timer = setTimeout(function () { probarVence(reglaElegida()); }, 250); };
+    $('pDia').addEventListener('input', function () {
+      var d = $('pDia').value;
+      if (d !== '' && Number(d) > 28) $('pDia').value = 28;
+      if (d !== '' && Number(d) < 1) $('pDia').value = 1;
+      cambio();
     });
+    $('pUlt').onchange = function () { if ($('pUlt').checked) $('pAnt').checked = false; $('pDia').disabled = $('pUlt').checked || $('pAnt').checked; cambio(); };
+    $('pAnt').onchange = function () { if ($('pAnt').checked) $('pUlt').checked = false; $('pDia').disabled = $('pUlt').checked || $('pAnt').checked; cambio(); };
+    $('pHabil').onchange = cambio;
     $('pProy').onchange = function () { $('pProyInfo').textContent = AYUDA_PROY[$('pProy').value] || ''; };
   }
   $('pNombre').focus();
   $('pNombre').select();
+}
+
+/** Regla que resulta del selector (la regla guardada, tal cual, mientras no se toque el selector). */
+function reglaElegida() {
+  var c = PANEL.c;
+  if (!PANEL.tocado) return c.vence || '';
+  return reglaDesdeSelector({ dia: $('pDia').value, fin: $('pUlt').checked ? 'ultimo' : $('pAnt').checked ? 'anteultimo' : '', habil: $('pHabil').checked });
+}
+
+function textoHabil() {
+  var fin = $('pUlt').checked ? 'último' : $('pAnt').checked ? 'anteúltimo' : '';
+  $('pHabilInfo').textContent = fin ? '(el ' + fin + ' día hábil del mes)' : '(si cae sábado, domingo o feriado, se paga el hábil siguiente)';
 }
 
 /** Las fechas ya calculadas para este concepto, desde el mes elegido. */
@@ -63,12 +99,12 @@ function fechasGuardadas(c) {
   return out;
 }
 
-function probarVence(txt) {
+function probarVence(regla) {
   if (!PANEL.c) return;
-  if (!txt) { PANEL.vence = { fechas: [] }; mostrarFechasVence(PANEL.vence); return; }
+  if (!regla) { PANEL.vence = { fechas: [] }; mostrarFechasVence(PANEL.vence); return; }
   $('pVenceInfo').textContent = 'Calculando…';
-  api('api_probarVence', txt, S.mesFoco).then(function (r) {
-    if (!PANEL.c || $('pVence').value.trim() !== txt) return;
+  api('api_probarVence', regla, S.mesFoco).then(function (r) {
+    if (!PANEL.c || reglaElegida() !== regla) return;
     PANEL.vence = r;
     mostrarFechasVence(r);
   }).catch(function (e) { $('pVenceInfo').textContent = e.message; });
@@ -78,22 +114,21 @@ function mostrarFechasVence(r) {
   var el = $('pVenceInfo');
   el.classList.toggle('error', !!r.error);
   if (r.error) { el.textContent = r.error; return; }
-  if (!r.fechas.length) { el.textContent = 'Sin vencimiento: no aparece en el calendario.'; return; }
-  el.innerHTML = (r.descripcion ? esc(r.descripcion) + '. ' : '') + 'Se paga: ' + r.fechas.map(function (f) {
+  if (!r.fechas.length) { el.textContent = 'Sin vencimiento: elegí un día o marcá último / anteúltimo.'; return; }
+  el.innerHTML = 'Se paga: ' + r.fechas.map(function (f) {
     return '<b>' + esc(MESES_P[Number(f.slice(5, 7)) - 1].slice(0, 3)) + ' (' + Number(f.slice(8)) + ')</b>';
   }).join(' · ');
 }
 
-function guardarPanel() {
+function guardarConceptoPanel() {
   var c = PANEL.c;
-  if (!c) return;
-  if (PANEL.vence && PANEL.vence.error) { aviso(PANEL.vence.error, true); $('pVence').focus(); return; }
+  if (PANEL.vence && PANEL.vence.error) { aviso(PANEL.vence.error, true); return; }
   var campos = {};
   var nombre = $('pNombre').value.trim();
   if (!nombre) { aviso('El concepto necesita un nombre', true); $('pNombre').focus(); return; }
   if (nombre !== c.nombre) campos.nombre = nombre;
   if ($('pCat').value !== c.categoria) campos.categoria = $('pCat').value;
-  if (c.tipo === 'fijo' && $('pVence').value.trim() !== (c.vence || '')) campos.vence = $('pVence').value.trim();
+  if (c.tipo === 'fijo') { var regla = reglaElegida(); if (regla !== (c.vence || '')) campos.vence = regla; }
   if ($('pMedio').value.trim() !== (c.medio || '')) campos.medio = $('pMedio').value.trim();
   if (c.tipo === 'fijo' && $('pProy').value !== c.proyeccion) campos.proyeccion = $('pProy').value;
   var monto = $('pMonto').value.trim(), v = celdaDe(c, S.mesFoco);
@@ -105,9 +140,63 @@ function guardarPanel() {
   else if (cambiaMonto) aviso('✓ Monto de ' + etiquetaMesP(S.mesFoco) + ' guardado');
 }
 
+/* ---------- Categoría ---------- */
+function abrirPanelCategoria(cat) {
+  clearTimeout(PANEL.timer);
+  PANEL = { modo: 'categoria', c: null, cat: cat, timer: null, color: cat.color || S.colores[0], clase: cat.clase };
+  var n = S.conceptos.filter(function (x) { return x.categoria === cat.nombre; }).length;
+  var h = [];
+  h.push('<label class="campo-p">Nombre<input id="pNombreCat" autocomplete="off" value="' + esc(cat.nombre) + '"></label>');
+  h.push('<div class="campo-p">Color<div class="colores-p" id="pColores">' + S.colores.map(function (col) {
+    return '<button type="button" class="color-p' + (col.toLowerCase() === PANEL.color.toLowerCase() ? ' activo' : '') + '" data-color="' + esc(col) + '" style="--cat:' + esc(col) + '" title="' + esc(col) + '" aria-label="Color ' + esc(col) + '"></button>';
+  }).join('') + '<label class="color-libre" title="Otro color"><input type="color" id="pColorLibre" value="' + esc(/^#[0-9a-f]{6}$/i.test(PANEL.color) ? PANEL.color : '#2A78D6') + '"><span>Otro</span></label></div></div>');
+  if (cat.tipo === 'fijo') {
+    h.push('<div class="campo-p">Suma como<div class="seg-p" id="pClase">' + CLASES_CAT.map(function (o) {
+      return '<button type="button" data-clase="' + o[0] + '" aria-pressed="' + (o[0] === cat.clase) + '">' + o[1] + '</button>';
+    }).join('') + '</div><span class="ayuda-p">Define en qué total del resumen cuentan sus filas (Ingresos, Gastos o Ahorro e inversión).</span></div>');
+  } else {
+    h.push('<p class="ayuda-p">Categoría de gastos eventuales: cada gasto es una fila y no se repite en los meses siguientes.</p>');
+  }
+  h.push('<p class="ayuda-p">' + (n ? n + ' fila' + (n > 1 ? 's' : '') + '. Para eliminar la categoría, primero borrá o mové sus filas (clic derecho → Mover a otra categoría).' : 'No tiene filas: se puede eliminar.') + '</p>');
+  mostrarPanel(catColor(cat), cat.nombre, 'Categoría · ' + n + ' fila' + (n === 1 ? '' : 's'), h.join(''));
+  $('pEliminar').title = 'Eliminar la categoría';
+  $('pColores').querySelectorAll('[data-color]').forEach(function (b) { b.onclick = function () { elegirColorPanel(b.dataset.color); }; });
+  $('pColorLibre').oninput = function () { elegirColorPanel($('pColorLibre').value); };
+  if ($('pClase')) $('pClase').querySelectorAll('[data-clase]').forEach(function (b) {
+    b.onclick = function () { PANEL.clase = b.dataset.clase; $('pClase').querySelectorAll('[data-clase]').forEach(function (x) { x.setAttribute('aria-pressed', String(x === b)); }); };
+  });
+  $('pNombreCat').focus();
+  $('pNombreCat').select();
+}
+
+function elegirColorPanel(col) {
+  PANEL.color = col;
+  $('panel').style.setProperty('--cat', col);
+  $('pColores').querySelectorAll('[data-color]').forEach(function (b) { b.classList.toggle('activo', b.dataset.color.toLowerCase() === col.toLowerCase()); });
+}
+
+function guardarCategoriaPanel() {
+  var cat = PANEL.cat;
+  var nombre = $('pNombreCat').value.trim();
+  if (!nombre) { aviso('La categoría necesita un nombre', true); $('pNombreCat').focus(); return; }
+  var p = { nombre: nombre, anterior: cat.nombre };
+  if (PANEL.color && PANEL.color !== cat.color) p.color = PANEL.color;
+  if (PANEL.clase && PANEL.clase !== cat.clase) p.clase = PANEL.clase;
+  cerrarPanel();
+  if (nombre === cat.nombre && !p.color && !p.clase) return;
+  if (nombre !== cat.nombre && S.colapsadas[cat.nombre]) { S.colapsadas[nombre] = true; delete S.colapsadas[cat.nombre]; guardarPreferencias(); }
+  operar('api_guardarCategoria', [p], '✓ Categoría ' + nombre + ' actualizada');
+}
+
+/* ---------- Común ---------- */
+function guardarPanel() {
+  if (PANEL.modo === 'concepto' && PANEL.c) guardarConceptoPanel();
+  else if (PANEL.modo === 'categoria' && PANEL.cat) guardarCategoriaPanel();
+}
+
 function cerrarPanel() {
   clearTimeout(PANEL.timer);
-  PANEL.c = null;
+  PANEL = { modo: null, c: null, cat: null, timer: null };
   $('panel').hidden = true;
   document.body.classList.remove('con-panel');
   $('grilla').focus({ preventScroll: true });
@@ -116,7 +205,15 @@ function cerrarPanel() {
 $('pGuardar').onclick = guardarPanel;
 $('pCancelar').onclick = cerrarPanel;
 $('pCerrar').onclick = cerrarPanel;
-$('pEliminar').onclick = function () { var c = PANEL.c; if (!c) return; cerrarPanel(); eliminarFila(c); };
+$('pEliminar').onclick = function () {
+  if (PANEL.modo === 'concepto' && PANEL.c) { var c = PANEL.c; cerrarPanel(); eliminarFila(c); }
+  else if (PANEL.modo === 'categoria' && PANEL.cat) {
+    var cat = PANEL.cat, filas = S.conceptos.filter(function (x) { return x.categoria === cat.nombre; });
+    if (filas.length) { eliminarCategoria({ cat: cat, conceptos: filas }); return; }
+    cerrarPanel();
+    eliminarCategoria({ cat: cat, conceptos: filas });
+  }
+};
 $('panel').addEventListener('keydown', function (e) {
   if (e.key === 'Escape') { e.preventDefault(); cerrarPanel(); }
   else if (e.key === 'Enter' && e.target.tagName !== 'BUTTON') { e.preventDefault(); guardarPanel(); }
