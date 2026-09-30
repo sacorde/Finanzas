@@ -83,16 +83,37 @@ test('junto al nombre: día de pago del mes y medio de pago abreviado', () => {
   assert.strictEqual(P.diaDePago(venc, 'b', '2026-02'), null);
 });
 
-test('fórmula de porcentaje (ƒx): cliente igual que servidor', () => {
-  for (const t of ['Ingresos*20%', '=ingresos * 12,5 %', '#abc123*10%', 'Ingresos*0%', 'otra cosa', '']) {
+test('fórmulas (ƒx): cliente igual que servidor', () => {
+  for (const t of ['Ingresos*20%', '=ingresos * 12,5 %', '#abc123*10%', 'Gastos+1000000', 'Ingresos-1.000.000', '#abc-500000', 'Ingresos*0%', 'Ingresos*20', 'Gastos+10%', 'otra cosa', '']) {
     const a = P.parsearFormulaP(t), b = G.parsearFormula_(t);
     assert.deepStrictEqual(a && { ...a }, b && { ...b }, t);
   }
-  assert.strictEqual(P.textoFormula('I', 20), 'Ingresos*20%');
-  assert.strictEqual(P.textoFormula('abc', 12.5), '#abc*12.5%');
+  assert.deepStrictEqual({ ...P.parsearFormulaP('Ingresos-1.000.000') }, { base: 'I', op: '-', n: 1000000 });
+  assert.strictEqual(P.parsearFormulaP('Ingresos*20'), null, 'el porcentaje lleva %');
+  assert.strictEqual(P.textoFormula('I', '%', 20), 'Ingresos*20%');
+  assert.strictEqual(P.textoFormula('G', '+', 1000000), 'Gastos+1000000');
+  assert.strictEqual(P.textoFormula('abc', '-', 500), '#abc-500');
   assert.strictEqual(P.describirFormula('Ingresos*20%', []), '20% de Ingresos');
+  assert.strictEqual(P.describirFormula('Gastos+1000000', []), 'Gastos + $ 1.000.000');
   assert.strictEqual(P.describirFormula('#abc*12.5%', [{ id: 'abc', nombre: 'Salario' }]), '12,5% de Salario');
   assert.strictEqual(P.resumenConcepto({ tipo: 'fijo', proyeccion: 'Repetir', formula: 'Ingresos*20%' }), 'ƒx 20%');
+  assert.strictEqual(P.resumenConcepto({ tipo: 'fijo', proyeccion: 'Repetir', formula: 'Gastos+1000' }), 'ƒx');
+});
+
+test('filas archivadas según el mes elegido', () => {
+  const ev = { tipo: 'eventual' }, fijo = { tipo: 'fijo' };
+  const vac = { '2026-01': { m: 900000 } };
+  assert.strictEqual(P.estaArchivado(ev, vac, '2026-09'), true, 'eventual de enero, archivado en septiembre');
+  assert.strictEqual(P.estaArchivado(ev, vac, '2026-01'), false, 'visible en su mes');
+  assert.strictEqual(P.estaArchivado(ev, { '2026-08': { m: 1 }, '2026-09': { m: 1 }, '2026-10': { m: 1 } }, '2026-09'), false, 'cuota del mes');
+  assert.strictEqual(P.estaArchivado(ev, {}, '2026-09'), false, 'fila nueva sin montos');
+  const alquiler = { '2026-01': { m: 1 }, '2026-09': { m: 1 }, '2026-12': { m: 1 } };
+  assert.strictEqual(P.estaArchivado(fijo, alquiler, '2026-09'), false, 'se paga todos los meses');
+  const netflix = { '2025-10': { m: 6000 }, '2026-04': { m: 6000 }, '2026-05': { m: 0 }, '2026-12': { m: 0 } };
+  assert.strictEqual(P.estaArchivado(fijo, netflix, '2026-09'), true, 'dado de baja (los 0 no cuentan)');
+  assert.strictEqual(P.estaArchivado(fijo, netflix, '2026-03'), false, 'visible antes de la baja');
+  assert.strictEqual(P.estaArchivado(fijo, { '2026-12': { m: 5 } }, '2026-09'), false, 'empieza más adelante');
+  assert.strictEqual(P.estaArchivado(fijo, {}, '2026-09'), false, 'Aguinaldo/Bonos vacíos siempre visibles');
 });
 
 test('selector de vencimiento: día 1–28, último / anteúltimo, hábil', () => {

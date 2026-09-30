@@ -50,31 +50,40 @@ function normConcepto_(c, categorias) {
 }
 
 /**
- * Fórmula de un concepto calculado como porcentaje: "Ingresos*20%" o "#<id>*20%".
- * @return {{base:string, pct:number}|null} base 'I' (total de ingresos) o el id de un concepto
+ * Fórmula de un concepto calculado: base (total de ingresos, total de gastos u otro concepto),
+ * operación y número. Formato: "Ingresos*20%" · "Gastos+1000000" · "Ingresos-500000" · "#<id>*10%".
+ * @return {{base:string, op:string, n:number}|null} base 'I' | 'G' | id; op '%' | '+' | '-'
  */
 function parsearFormula_(texto) {
-  var m = /^=?\s*(ingresos|#[\w-]+)\s*\*\s*(\d+(?:[.,]\d+)?)\s*%\s*$/i.exec(String(texto || ''));
+  var m = /^=?\s*(ingresos|gastos|#[\w-]+)\s*([*+\-])\s*([\d.,]+)\s*(%?)\s*$/i.exec(String(texto || ''));
   if (!m) return null;
-  var pct = Number(m[2].replace(',', '.'));
-  if (!(pct > 0) || pct > 1000) return null;
-  return { base: m[1].charAt(0) === '#' ? m[1].slice(1) : 'I', pct: pct };
+  var op = m[2] === '*' ? '%' : m[2];
+  if ((op === '%') !== (m[4] === '%')) return null;
+  var t = m[3];
+  if (/^\d{1,3}(\.\d{3})+$/.test(t)) t = t.replace(/\./g, '');
+  else if (t.indexOf(',') >= 0) t = t.replace(/\./g, '').replace(',', '.');
+  var n = Number(t);
+  if (!(n > 0) || (op === '%' && n > 1000)) return null;
+  var b = m[1].toLowerCase();
+  return { base: b === 'ingresos' ? 'I' : b === 'gastos' ? 'G' : m[1].slice(1), op: op, n: n };
 }
 
-function formulaTexto_(f) { return (f.base === 'I' ? 'Ingresos' : '#' + f.base) + '*' + f.pct + '%'; }
+function formulaTexto_(f) {
+  return (f.base === 'I' ? 'Ingresos' : f.base === 'G' ? 'Gastos' : '#' + f.base) + (f.op === '%' ? '*' + f.n + '%' : f.op + f.n);
+}
 
 /**
- * Completa los meses de un concepto con fórmula (desde el mes actual hasta el horizonte):
- * porcentaje del total de ingresos o de otro concepto. Lo que cargaste a mano en un mes se respeta.
+ * Completa los meses de un concepto con fórmula (desde el mes actual hasta el horizonte).
+ * Lo que cargaste a mano en un mes se respeta.
  */
 function aplicarFormula_(modelo, c, meses, idxHoy, idxFin) {
   var f = parsearFormula_(c.formula);
   var porMes = modelo.valores[c.id] = modelo.valores[c.id] || {};
-  var ingresos = modelo.conceptos.filter(function (x) { return x.clase === 'I' && !x.formula && x.id !== c.id; });
+  var suman = f.base === 'I' || f.base === 'G' ? modelo.conceptos.filter(function (x) { return x.clase === f.base && !x.formula && x.id !== c.id; }) : null;
   var base = function (mes) {
-    if (f.base === 'I') {
+    if (suman) {
       var s = null;
-      ingresos.forEach(function (x) { var v = modelo.valores[x.id] && modelo.valores[x.id][mes]; if (v) s = (s || 0) + v.monto; });
+      suman.forEach(function (x) { var v = modelo.valores[x.id] && modelo.valores[x.id][mes]; if (v) s = (s || 0) + v.monto; });
       return s;
     }
     var v = modelo.valores[f.base] && modelo.valores[f.base][mes];
@@ -87,7 +96,8 @@ function aplicarFormula_(modelo, c, meses, idxHoy, idxFin) {
     if (x && x.estado === 'confirmado') return;
     var b = i <= idxFin ? base(mes) : null;
     if (b === null) { if (x) { delete porMes[mes]; cambios++; } return; }
-    var monto = Math.round(b * f.pct) / 100;
+    var monto = f.op === '%' ? b * f.n / 100 : f.op === '+' ? b + f.n : Math.max(0, b - f.n);
+    monto = Math.round(monto * 100) / 100;
     if (!x || x.monto !== monto || x.cuenta) { porMes[mes] = { monto: monto, cuenta: '', estado: 'estimado' }; cambios++; }
   });
   return cambios;

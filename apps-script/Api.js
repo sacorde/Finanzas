@@ -117,10 +117,11 @@ function api_guardarConcepto(c) {
     if (regla && regla.error) throw new Error(regla.error);
     if (datos.formula) {
       var f = parsearFormula_(datos.formula);
-      if (!f) throw new Error('No entendí la fórmula "' + datos.formula + '". Ejemplo: Ingresos*20%');
-      var ref = f.base === 'I' ? null : m.conceptos.filter(function (x) { return x.id === f.base; })[0];
-      if (f.base !== 'I' && (!ref || ref.id === base.id || ref.formula)) throw new Error('Elegí otro concepto como base del porcentaje.');
-      if (f.base === 'I' && cat.clase === 'I') throw new Error('Un ingreso no puede calcularse como porcentaje del total de ingresos.');
+      if (!f) throw new Error('No entendí la fórmula "' + datos.formula + '". Ejemplos: Ingresos*20% · Gastos+1000000');
+      var ref = f.base === 'I' || f.base === 'G' ? null : m.conceptos.filter(function (x) { return x.id === f.base; })[0];
+      if (f.base !== 'I' && f.base !== 'G' && (!ref || ref.id === base.id || ref.formula)) throw new Error('Elegí otro concepto como base de la fórmula.');
+      if (f.base === 'I' && cat.clase === 'I') throw new Error('Un ingreso no puede calcularse a partir del total de ingresos.');
+      if (f.base === 'G' && cat.clase === 'G') throw new Error('Un gasto no puede calcularse a partir del total de gastos.');
     }
     var nuevo = normConcepto_(datos, m.categorias);
     if (existente) m.conceptos[m.conceptos.indexOf(existente)] = nuevo; else m.conceptos.push(nuevo);

@@ -7,6 +7,8 @@
     --good: #0CA30C; --good-ink: #067647; --good-soft: #ECFDF3; --critical: #D03B3B; --critical-ink: #B42318; --critical-soft: #FEF3F2;
     --warn-ink: #93370D; --warn-soft: #FEF6E7;
     --sec-I: #067647; --sec-I-bg: #ECFDF3; --sec-G: #344054; --sec-G-bg: #F2F4F7; --sec-A: #1D4ED8; --sec-A-bg: #EFF4FF; --sec-E: #B54708; --sec-E-bg: #FFF6ED;
+    /* Grupos: ingresos siempre verde, gastos siempre rojo, ahorro e inversión siempre azul */
+    --grp-I: #067647; --grp-I-bg: #ECFDF3; --grp-G: #C53030; --grp-G-bg: #FEF3F2; --grp-A: #1D4ED8; --grp-A-bg: #EFF4FF;
     --s1: #2A78D6; --s2: #EB6834; --s3: #1BAF7A; --s4: #EDA100; --s5: #E87BA4; --s6: #008300; --s7: #4A3AA7; --s8: #E34948; --otros: #A8A7A1;
     --shadow: 0 1px 2px rgba(16,24,40,.06), 0 1px 1px rgba(16,24,40,.03);
     --shadow-lg: 0 12px 32px rgba(16,24,40,.16);
@@ -21,6 +23,7 @@
       --accent: #818CF8; --accent-soft: #23234A; --accent-ink: #C7D2FE; --sel: rgba(129,140,248,.18);
       --good-ink: #32D583; --good-soft: #0F2A1A; --critical-ink: #F97066; --critical-soft: #3A1717; --warn-ink: #FDB022; --warn-soft: #33240D;
       --sec-I: #32D583; --sec-I-bg: #0F2A1A; --sec-G: #D0D5DD; --sec-G-bg: #1F242B; --sec-A: #84ADFF; --sec-A-bg: #14213D; --sec-E: #FDB022; --sec-E-bg: #2E2110;
+      --grp-I: #32D583; --grp-I-bg: #0F2A1A; --grp-G: #F97066; --grp-G-bg: #3A1717; --grp-A: #84ADFF; --grp-A-bg: #14213D;
       --s1: #3987E5; --s2: #D95926; --s3: #199E70; --s4: #C98500; --s5: #D55181; --s6: #008300; --s7: #9085E9; --s8: #E66767; --otros: #6B6A66;
     }
   }
@@ -77,7 +80,7 @@
   .leyenda-celdas b { color: var(--ink); font-weight: 600; }
   .leyenda-celdas em { color: var(--muted); }
 
-  .grilla-wrap { flex: 1; min-height: 0; margin: 0 16px; border: 1px solid var(--line); border-radius: 0; background: var(--surface); overflow: hidden; display: flex; flex-direction: column; box-shadow: var(--shadow); }
+  .grilla-wrap { flex: 1; min-height: 0; margin: 0 16px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); overflow: hidden; display: flex; flex-direction: column; box-shadow: var(--shadow); }
   .grilla { flex: 1; overflow: auto; position: relative; outline: none; }
   table.g { border-collapse: separate; border-spacing: 0; font-size: 13px; --gr: 28px; }
   /* Columna de grupo (Balance · Ingresos · Gastos · Ahorro e inversión): solo informativa */
@@ -91,11 +94,25 @@
   table.g td.gr.corto { position: sticky; }
   table.g td.gr.corto span { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; padding: 0; letter-spacing: .06em; overflow: hidden; }
   table.g .gr-B { --g-bg: var(--surface3); --g-ink: var(--ink2); }
-  table.g .gr-I { --g-bg: var(--sec-I-bg); --g-ink: var(--sec-I); box-shadow: inset 3px 0 0 var(--sec-I); }
-  table.g .gr-G { --g-bg: var(--sec-G-bg); --g-ink: var(--sec-G); box-shadow: inset 3px 0 0 var(--sec-G); }
-  table.g .gr-A { --g-bg: var(--sec-A-bg); --g-ink: var(--sec-A); box-shadow: inset 3px 0 0 var(--sec-A); }
+  table.g .gr-I { --g-bg: var(--grp-I-bg); --g-ink: var(--grp-I); }
+  table.g .gr-G { --g-bg: var(--grp-G-bg); --g-ink: var(--grp-G); }
+  table.g .gr-A { --g-bg: var(--grp-A-bg); --g-ink: var(--grp-A); }
+  /* Bloques con esquinas redondeadas a la izquierda (la columna de grupo) */
+  table.g td.gr-I, table.g td.gr-G, table.g td.gr-A, table.g td.gr-B { border: 1px solid color-mix(in srgb, var(--g-ink) 35%, var(--line)); border-radius: 10px 0 0 10px; box-shadow: inset 3px 0 0 var(--g-ink); }
+  table.g td.gr-B { box-shadow: none; }
+  /* Balance: ingresos verde, gastos rojo, ahorro azul */
+  table.g tr.res-I .res-et { color: var(--grp-I); }
+  table.g tr.res-G .res-et { color: var(--grp-G); }
+  table.g tr.res-A .res-et { color: var(--grp-A); }
+  table.g tr.res-I > td.n { box-shadow: inset 3px 0 0 var(--grp-I); }
+  table.g tr.res-G > td.n { box-shadow: inset 3px 0 0 var(--grp-G); }
+  table.g tr.res-A > td.n { box-shadow: inset 3px 0 0 var(--grp-A); }
+  table.g tr.item.archivada td { opacity: .55; }
+  table.g tr.item.archivada td.n .tn { font-style: italic; }
+  #bArchivados[aria-pressed="true"] { background: var(--surface3); color: var(--ink); }
   /* Separación entre bloques (Balance · Ingresos · Gastos · Ahorro), cada uno enmarcado con bordes rectos */
   table.g tr.sep-grupo td { height: 10px; padding: 0; border: 0; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); background: var(--page); }
+  table.g tr.sep-grupo td.sep-gr { border: 0; position: sticky; left: 0; z-index: 4; }
   table.g thead tr.res4 > * { border-bottom: 1px solid var(--line) !important; }
   table.g tr.resultado > * { font-size: 13.5px; }
   table.g tr.resultado td.m, table.g tr.resultado td.t { font-weight: 800; }
@@ -217,7 +234,13 @@
   .fx-caja[hidden] { display: none !important; }
   .fx-linea { display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 600; color: var(--ink); }
   .fx-ico { font: italic 700 15px Georgia, serif; color: var(--accent-ink); }
-  .campo-p .fx-linea input { width: 72px; text-align: right; padding: 7px 9px; }
+  .campo-p .fx-linea input { width: 130px; flex: 1; text-align: right; padding: 7px 9px; font-variant-numeric: tabular-nums; }
+  .campo-p .fx-linea select.fx-op { flex: none; width: auto; }
+  .fx-unidad { font-weight: 700; color: var(--ink2); min-width: 14px; }
+  .fx-previa b { color: var(--accent-ink); }
+  /* Sin flechitas en los campos numéricos */
+  input[type=number]::-webkit-inner-spin-button, input[type=number]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+  input[type=number] { -moz-appearance: textfield; appearance: textfield; }
   .campo-p .fx-linea select { flex: 1; min-width: 0; padding: 7px 9px; }
   .fx-caja .mini { justify-self: start; }
   .panel-pie { display: flex; gap: 8px; align-items: center; padding: 12px 16px calc(12px + env(safe-area-inset-bottom)); border-top: 1px solid var(--line); background: var(--surface2); }

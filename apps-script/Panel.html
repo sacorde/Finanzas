@@ -42,17 +42,23 @@ function abrirPanel(c) {
   PANEL.fx = fx;
   h.push('<div class="campo-p"><label for="pMonto">Monto de ' + esc(etiquetaMesP(S.mesFoco).toLowerCase()) + '</label>' +
     '<div class="monto-fx"><input id="pMonto" class="num" autocomplete="off" inputmode="decimal" placeholder="Vacío" value="' + esc(montoPanel(v)) + '">' +
-    (fijo ? '<button type="button" class="boton-fx' + (fx ? ' activo' : '') + '" id="pFxBtn" title="Calcular como porcentaje de los ingresos o de otro concepto" aria-pressed="' + !!fx + '">ƒx</button>' : '') + '</div>' +
+    (fijo ? '<button type="button" class="boton-fx' + (fx ? ' activo' : '') + '" id="pFxBtn" title="Calcular con una fórmula: % de los ingresos, gastos + un monto, etc." aria-pressed="' + !!fx + '">ƒx</button>' : '') + '</div>' +
     '<span class="ayuda-p">' + (v ? (v.e ? (fx ? 'Calculado por la fórmula' : 'Estimado por el sistema') + ': si lo cambiás queda confirmado.' : 'Cargado por vos.') : 'Acepta cuentas: 1500+300, 150k, 12000*3.') + '</span>');
   if (fijo) {
     var bases = S.conceptos.filter(function (x) { return x.tipo === 'fijo' && !x.formula && x.id !== c.id; })
       .sort(function (a, b) { return grupoIdx(a.clase) - grupoIdx(b.clase) || a.orden - b.orden; });
     var baseSel = fx ? fx.base : (c.clase === 'I' ? (bases[0] && bases[0].id) : 'I');
+    var opSel = fx ? fx.op : '%';
+    var totales = (c.clase !== 'I' ? '<option value="I"' + (baseSel === 'I' ? ' selected' : '') + '>Total de ingresos</option>' : '') +
+      (c.clase !== 'G' ? '<option value="G"' + (baseSel === 'G' ? ' selected' : '') + '>Total de gastos</option>' : '');
     h.push('<div class="fx-caja" id="pFx"' + (fx ? '' : ' hidden') + '>' +
-      '<div class="fx-linea"><span class="fx-ico">ƒx</span><input id="pPct" type="number" min="0" max="1000" step="0.5" inputmode="decimal" placeholder="20" value="' + (fx ? fx.pct : '') + '"><span>% de</span>' +
-      '<select id="pBase">' + (c.clase !== 'I' ? '<option value="I"' + (baseSel === 'I' ? ' selected' : '') + '>Total de ingresos</option>' : '') +
+      '<div class="fx-linea"><span class="fx-ico">ƒx</span><select id="pBase" aria-label="Sobre qué se calcula">' + totales +
       '<optgroup label="Un concepto">' + bases.map(function (x) { return '<option value="' + esc(x.id) + '"' + (x.id === baseSel ? ' selected' : '') + '>' + esc(x.nombre) + ' · ' + esc(x.categoria) + '</option>'; }).join('') + '</optgroup></select></div>' +
-      '<span class="ayuda-p">Desde el mes actual, cada mes se calcula solo con este porcentaje. Si escribís un monto en una celda, ese mes queda con tu valor.</span>' +
+      '<div class="fx-linea"><select id="pOp" class="fx-op" aria-label="Operación">' +
+        [['%', '× porcentaje'], ['+', '+ sumar'], ['-', '− restar']].map(function (o) { return '<option value="' + o[0] + '"' + (o[0] === opSel ? ' selected' : '') + '>' + o[1] + '</option>'; }).join('') + '</select>' +
+      '<input id="pNum" type="text" inputmode="decimal" autocomplete="off" placeholder="20" value="' + esc(fx ? (fx.op === '%' ? String(fx.n).replace('.', ',') : Number(fx.n).toLocaleString('es-AR')) : '') + '"><span id="pUnidad" class="fx-unidad"></span></div>' +
+      '<span class="ayuda-p fx-previa" id="pFxPrevia"></span>' +
+      '<span class="ayuda-p">Desde el mes actual, cada mes se calcula solo. Si escribís un monto en una celda, ese mes queda con tu valor.</span>' +
       '<button type="button" class="mini" id="pFxQuitar">Quitar fórmula</button></div>');
   }
   h.push('</div>');
@@ -98,12 +104,38 @@ function abrirPanel(c) {
     $('pFxBtn').onclick = function () {
       var abrir = $('pFx').hidden;
       mostrarFx(abrir);
-      if (abrir) { if (!$('pPct').value) $('pPct').value = 20; $('pPct').focus(); $('pPct').select(); }
+      if (abrir) { if (!$('pNum').value) $('pNum').value = $('pOp').value === '%' ? '20' : ''; previaFx(); $('pNum').focus(); $('pNum').select(); }
     };
-    $('pFxQuitar').onclick = function () { $('pPct').value = ''; mostrarFx(false); };
+    $('pFxQuitar').onclick = function () { $('pNum').value = ''; mostrarFx(false); };
+    $('pBase').onchange = previaFx; $('pOp').onchange = previaFx; $('pNum').oninput = previaFx;
+    previaFx();
   }
   $('pNombre').focus();
   $('pNombre').select();
+}
+
+/** Número de la fórmula (acepta 20 · 12,5 · 1.000.000 · 1M · 150k). */
+function numeroFx() {
+  var t = $('pNum').value.trim();
+  if (!t) return 0;
+  var m = montoP(t);
+  return m ? m.valor : NaN;
+}
+
+/** Muestra la unidad (% o $) y el resultado de la fórmula para el mes siguiente. */
+function previaFx() {
+  var op = $('pOp').value, n = numeroFx(), base = $('pBase').value;
+  $('pUnidad').textContent = op === '%' ? '%' : '$';
+  $('pNum').placeholder = op === '%' ? '20' : '1.000.000';
+  var el = $('pFxPrevia');
+  if (!(n > 0)) { el.textContent = ''; return; }
+  var mes = S.mesFoco > S.mesHoy ? S.mesFoco : sumarMesP(S.mesHoy, 1);
+  var b = null;
+  if (base === 'I' || base === 'G') S.conceptos.forEach(function (x) { if (x.clase === base && !x.formula && x.id !== PANEL.c.id) { var v = celdaDe(x, mes); if (v) b = (b || 0) + v.m; } });
+  else { var v = S.V[base] && S.V[base][mes]; b = v ? v.m : null; }
+  if (b === null) { el.textContent = 'Sin datos de la base en ' + etiquetaMesP(mes).toLowerCase() + '.'; return; }
+  var r = op === '%' ? b * n / 100 : op === '+' ? b + n : Math.max(0, b - n);
+  el.innerHTML = 'En ' + esc(etiquetaMesP(mes).toLowerCase()) + ': <b>' + esc(pesos(r)) + '</b> (' + esc(pesos(b)) + (op === '%' ? ' × ' + String(n).replace('.', ',') + '%' : (op === '+' ? ' + ' : ' − ') + pesos(n)) + ')';
 }
 
 /** Regla que resulta del selector (la regla guardada, tal cual, mientras no se toque el selector). */
@@ -158,9 +190,9 @@ function guardarConceptoPanel() {
   if ($('pMedio').value.trim() !== (c.medio || '')) campos.medio = $('pMedio').value.trim();
   if (c.tipo === 'fijo' && $('pProy').value !== c.proyeccion) campos.proyeccion = $('pProy').value;
   if (c.tipo === 'fijo') {
-    var pct = Number(String($('pPct').value).replace(',', '.'));
-    if (!$('pFx').hidden && $('pPct').value !== '' && !(pct > 0)) { aviso('Poné un porcentaje mayor a 0', true); $('pPct').focus(); return; }
-    var formula = !$('pFx').hidden && pct > 0 ? textoFormula($('pBase').value, pct) : '';
+    var n = numeroFx();
+    if (!$('pFx').hidden && $('pNum').value.trim() !== '' && !(n > 0)) { aviso('Poné un número mayor a 0', true); $('pNum').focus(); return; }
+    var formula = !$('pFx').hidden && n > 0 ? textoFormula($('pBase').value, $('pOp').value, n) : '';
     if (formula !== (c.formula || '')) campos.formula = formula;
   }
   var monto = $('pMonto').value.trim(), v = celdaDe(c, S.mesFoco);

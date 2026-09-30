@@ -237,6 +237,17 @@ test('ahorro como porcentaje de los ingresos (fórmula)', () => {
   assert.throws(() => G.api_guardarConcepto({ id: ah.id, formula: '#' + ah.id + '*10%' }), /otro concepto/);
   assert.throws(() => G.api_guardarConcepto({ id: sal.id, formula: 'Ingresos*10%' }), /ingreso/);
   assert.throws(() => G.api_guardarConcepto({ id: ah.id, formula: 'cualquier cosa' }), /fórmula/);
+  // Total de gastos + un monto / ingresos − un monto
+  G.api_guardarConcepto({ id: ah.id, formula: 'Gastos+1000000' });
+  d = G.api_datos();
+  const gas = (mes) => d.conceptos.filter((c) => c.clase === 'G').reduce((t, c) => { const v = valor(d, c.id, mes); return t + (v ? v[2] : 0); }, 0);
+  assert.strictEqual(valor(d, ah.id, '2027-02')[2], Math.round((gas('2027-02') + 1000000) * 100) / 100);
+  G.api_guardarConcepto({ id: ah.id, formula: 'Ingresos-1.000.000' });
+  d = G.api_datos();
+  assert.strictEqual(r.conceptos.length > 0, true);
+  assert.strictEqual(d.conceptos.find((c) => c.id === ah.id).formula, 'Ingresos-1000000');
+  assert.strictEqual(valor(d, ah.id, '2027-02')[2], Math.max(0, Math.round((ing(d, '2027-02') - 1000000) * 100) / 100));
+  assert.throws(() => G.api_guardarConcepto({ id: concepto('Luz').id, formula: 'Gastos*10%' }), /gasto/);
   // Quitar la fórmula: vuelve a proyectarse como siempre
   G.api_guardarCeldas([{ c: ah.id, mes: '2026-12', texto: '' }]);
   r = plano(G.api_guardarConcepto({ id: ah.id, formula: '' }));

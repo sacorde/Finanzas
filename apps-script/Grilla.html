@@ -45,14 +45,10 @@ function construirColumnas() {
   });
 }
 
-/** Eventuales: se muestran las filas con algún monto en los años desplegados (o recién creadas). */
-function eventualVisible(c) {
-  if (c.tipo !== 'eventual' || S.verTodo || S.nuevos[c.id]) return true;
-  var porMes = S.V[c.id] || {};
-  var meses = Object.keys(porMes);
-  if (!meses.length) return true;
-  return meses.some(function (m) { return !S.aniosCerrados[m.slice(0, 4)]; });
-}
+/** Filas archivadas (no corresponden al mes elegido): se ocultan salvo con "Mostrar archivados". */
+function archivada(c) { return !S.nuevos[c.id] && estaArchivado(c, S.V[c.id], S.mesFoco); }
+function filaVisible(c) { return S.verTodo || !archivada(c); }
+function contarArchivados() { return S.conceptos.filter(archivada).length; }
 
 function tipoCelda(r, k) {
   var f = G.filas[r], col = G.cols[k];
@@ -76,7 +72,7 @@ function valorFilaCol(f, col) {
 
 /* ---------- Dibujo ---------- */
 function dibujarGrilla() {
-  G.filas = construirFilas(S.conceptos, S.categorias, { colapsadas: S.colapsadas, visible: eventualVisible, nuevos: S.temporales });
+  G.filas = construirFilas(S.conceptos, S.categorias, { colapsadas: S.colapsadas, visible: filaVisible, nuevos: S.temporales });
   construirColumnas();
   var mesHoy = S.mesHoy, foco = S.mesFoco, h = [];
   var claseMes = function (c, base) { return base + (c.mes === mesHoy ? ' hoy' : '') + (c.mes === foco ? ' foco' : '') + (c.t === 'mes' && c.mes.slice(5) === '12' ? ' fin-anio' : ''); };
@@ -91,7 +87,7 @@ function dibujarGrilla() {
     h.push('<th colspan="' + n + '" data-anio="' + a + '" class="anio" title="Clic para ' + (S.aniosCerrados[a] ? 'mostrar' : 'plegar') + ' ' + a + '"><span>' + (S.aniosCerrados[a] ? '▸ ' : '▾ ') + a + '</span></th>');
     i += n;
   }
-  h.push('</tr><tr class="meses"><th class="n"><span class="ayuda-n">Clic derecho: más opciones</span></th>');
+  h.push('</tr><tr class="meses"><th class="n"></th>');
   G.cols.forEach(function (c) {
     if (c.t === 'mes') h.push('<th class="' + claseMes(c, 'm') + '" data-mes="' + c.mes + '">' + MESES_P[Number(c.mes.slice(5)) - 1].slice(0, 3) + '</th>');
     else if (c.t === 'tot') h.push('<th class="t">Total ' + c.anio + '</th>');
@@ -99,8 +95,8 @@ function dibujarGrilla() {
   h.push('</tr>');
   // Resumen fijo arriba
   // Balance fijo arriba
-  [['I', 'Ingresos', 'var(--sec-I)'], ['G', 'Gastos', 'var(--sec-G)'], ['A', 'Ahorro e inversión', 'var(--sec-A)'], ['R', 'Resultado', 'var(--ink)']].forEach(function (x, j) {
-    h.push('<tr class="res res' + (j + 1) + (x[0] === 'R' ? ' resultado' : '') + '">' + (j === 0 ? '<td class="gr gr-B" rowspan="4"><span>Balance</span></td>' : '') +
+  [['I', 'Ingresos', 'var(--grp-I)'], ['G', 'Gastos', 'var(--grp-G)'], ['A', 'Ahorro e inversión', 'var(--grp-A)'], ['R', 'Resultado', 'var(--ink)']].forEach(function (x, j) {
+    h.push('<tr class="res res' + (j + 1) + ' res-' + x[0] + (x[0] === 'R' ? ' resultado' : '') + '">' + (j === 0 ? '<td class="gr gr-B" rowspan="4"><span>Balance</span></td>' : '') +
       '<td class="n"><span class="res-et"><i style="background:' + x[2] + '"></i>' + x[1] + '</span></td>');
     G.cols.forEach(function (c) {
       if (c.t === 'nombre') return;
@@ -120,7 +116,7 @@ function dibujarGrilla() {
     else if (r === 0 || G.filas[r - 1].grupo !== f.grupo) {
       var largo = 1;
       while (r + largo < G.filas.length && G.filas[r + largo].grupo === f.grupo) largo++;
-      h.push('<tr class="sep-grupo"><td colspan="' + nCols + '"></td></tr>');
+      h.push('<tr class="sep-grupo"><td class="sep-gr"></td><td colspan="' + (nCols - 1) + '"></td></tr>');
       // Si el grupo tiene pocas filas (ej. plegado), va una etiqueta corta que no agranda las filas
       var corto = largo <= 3;
       gr = '<td class="gr gr-' + f.grupo + (corto ? ' corto' : '') + '" rowspan="' + largo + '" title="' + NOMBRE_GRUPO[f.grupo] + '"><span>' +
@@ -153,7 +149,7 @@ function dibujarGrilla() {
     } else {
       var c0 = f.c, meta = resumenConcepto(c0), dia = diaDePago(S.venc, c0.id, foco);
       var titulo = c0.nombre + (dia ? ' · se paga el ' + dia + ' de ' + etiquetaMesP(foco).toLowerCase() : '') + (c0.medio ? ' · ' + c0.medio : '') + (c0.formula ? ' · ƒx ' + describirFormula(c0.formula, S.conceptos) : '');
-      h.push('<tr class="item' + (c0.tipo === 'eventual' ? ' ev' : '') + '" style="--cat:' + catColor(f.cat) + '">' + gr + '<td class="n" data-f="' + r + '" data-k="0" title="' + esc(titulo) + '">' +
+      h.push('<tr class="item' + (c0.tipo === 'eventual' ? ' ev' : '') + (S.verTodo && archivada(c0) ? ' archivada' : '') + '" style="--cat:' + catColor(f.cat) + '">' + gr + '<td class="n" data-f="' + r + '" data-k="0" title="' + esc(titulo) + '">' +
         '<button class="lapiz" data-editar="1" title="Editar ' + esc(c0.nombre) + '" aria-label="Editar ' + esc(c0.nombre) + '">✎</button>' +
         (meta ? '<span class="meta">' + esc(meta) + '</span>' : '') +
         '<span class="tn">' + esc(c0.nombre) + '</span>' + (dia ? '<span class="dia">(' + dia + ')</span>' : '') +
@@ -171,16 +167,35 @@ function dibujarGrilla() {
       h.push('</tr>');
     }
   });
-  h.push('<tr class="sep-grupo"><td colspan="' + nCols + '"></td></tr><tr class="agregar-cat"><td class="gr"></td><td class="n"><button class="mas txt" data-mas="nuevacat" title="Agregar una categoría">+ categoría</button></td><td colspan="' + (G.cols.length - 1) + '"></td></tr>');
+  h.push('<tr class="sep-grupo"><td class="sep-gr"></td><td colspan="' + (nCols - 1) + '"></td></tr><tr class="agregar-cat"><td class="gr"></td><td class="n"><button class="mas txt" data-mas="nuevacat" title="Agregar una categoría">+ categoría</button></td><td colspan="' + (G.cols.length - 1) + '"></td></tr>');
   h.push('</tbody></table>');
   var cont = $('grilla');
   var sl = cont.scrollLeft, st = cont.scrollTop;
   cont.innerHTML = h.join('');
+  if (G.relleno) cont.querySelector('table.g').style.marginRight = G.relleno + 'px';
   if (G.editor) cont.appendChild(G.editor.input);
   cont.scrollLeft = sl; cont.scrollTop = st;
   if (G.primera) { G.primera = false; irAMes(S.mesFoco); }
   pintarSeleccion();
   actualizarBotonPlegar();
+  actualizarBotonArchivados();
+}
+
+/** Mostrar / ocultar archivados (el botón de la barra muestra cuántos hay para el mes elegido). */
+function actualizarBotonArchivados() {
+  var b = $('bArchivados');
+  if (!b) return;
+  var n = contarArchivados();
+  b.hidden = !n && !S.verTodo;
+  b.setAttribute('aria-pressed', String(S.verTodo));
+  b.textContent = (S.verTodo ? 'Ocultar archivados' : 'Mostrar archivados') + (n ? ' (' + n + ')' : '');
+  b.title = 'Filas que no corresponden a ' + etiquetaMesP(S.mesFoco).toLowerCase() + ': gastos eventuales de otros meses y conceptos que se dejaron de pagar';
+}
+function alternarArchivados() {
+  S.verTodo = !S.verTodo;
+  guardarPreferencias();
+  G.sel = null;
+  dibujarGrilla();
 }
 
 /** Plegar todo / desplegar todo (el botón de la barra). */
@@ -208,8 +223,17 @@ function irAMes(mes, fila) {
   G.cols.forEach(function (c, i) { if (c.mes === mes) k = i; });
   if (k < 0) return;
   var cont = $('grilla'), th = cont.querySelector('thead th[data-mes="' + mes + '"]');
-  // El mes elegido queda como primera columna, pegado a la columna de conceptos
-  if (th) cont.scrollLeft = Math.max(0, cont.scrollLeft + th.getBoundingClientRect().left - cont.querySelector('thead .n').getBoundingClientRect().right);
+  // El mes elegido queda como primera columna, pegado a la columna de conceptos.
+  // Si a la derecha no hay suficientes columnas (ej. el año siguiente plegado), se agrega espacio vacío al final.
+  if (th) {
+    var tabla = cont.querySelector('table.g');
+    var destino = Math.max(0, cont.scrollLeft + th.getBoundingClientRect().left - cont.querySelector('thead .n').getBoundingClientRect().right);
+    tabla.style.marginRight = '0px';
+    var max = cont.scrollWidth - cont.clientWidth;
+    G.relleno = destino > max ? Math.ceil(destino - max) : 0;
+    tabla.style.marginRight = G.relleno + 'px';
+    cont.scrollLeft = destino;
+  }
   var r = fila !== undefined ? fila : (G.sel && G.filas[G.sel.r2] && G.filas[G.sel.r2].t === 'item' ? G.sel.r2 : G.filas.map(function (f) { return f.t; }).indexOf('item'));
   if (r >= 0) { G.sel = { r: r, k: k, r2: r, k2: k }; pintarSeleccion(); }
 }
