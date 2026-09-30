@@ -60,7 +60,7 @@ test('detecta el Excel original y lo instala', () => {
 test('categorías de un solo nivel, con color; conceptos con vencimiento y medio', () => {
   const d = G.api_datos();
   assert.deepStrictEqual(plano(d.categorias.map((c) => c.nombre)),
-    ['Ingresos', 'Vivienda', 'Servicios', 'Suscripciones', 'Transporte', 'Supermercado', 'Préstamos', 'Ahorro e Inversión', 'Eventuales']);
+    ['Ingresos', 'Vivienda', 'Servicios', 'Suscripciones', 'Transporte', 'Supermercado', 'Préstamos', 'Eventuales', 'Ahorro e Inversión'], 'agrupadas: ingresos → gastos → ahorro');
   assert.strictEqual(new Set(d.categorias.map((c) => c.color)).size, 9, 'cada categoría con su color');
   assert.ok(d.categorias.every((c) => /^#[0-9A-F]{6}$/i.test(c.color)));
   assert.deepStrictEqual(plano(d.conceptos.filter((c) => c.categoria === 'Ingresos').map((c) => c.nombre)), ['Salario', 'Aguinaldo', 'Bonos', 'Otros']);

@@ -144,9 +144,12 @@ function guardarValores_(modelo) {
   escribirTabla(FZ.T.VALORES, aplanarValores_(modelo.valores, modelo.conceptos));
 }
 
-/** Orden global: categoría (orden de la tabla) → concepto. Deja órdenes 10, 20, 30… */
+var ORDEN_CLASE_ = { I: 0, G: 1, A: 2 };
+
+/** Orden global: grupo (ingresos → gastos → ahorro) → categoría (orden de la tabla) → concepto. Deja órdenes 10, 20, 30… */
 function renumerar_(m) {
-  m.categorias.sort(function (a, b) { return a.orden - b.orden; });
+  var gi = function (c) { return ORDEN_CLASE_.hasOwnProperty(c.clase) ? ORDEN_CLASE_[c.clase] : 1; };
+  m.categorias.sort(function (a, b) { return gi(a) - gi(b) || a.orden - b.orden; });
   var catIdx = {};
   m.categorias.forEach(function (c, i) { c.orden = (i + 1) * 10; catIdx[c.nombre] = i; });
   var ci = function (c) { return catIdx.hasOwnProperty(c.categoria) ? catIdx[c.categoria] : 1e6; };

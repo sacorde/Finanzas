@@ -348,7 +348,7 @@ function moverFila(c, dir) {
 }
 
 function moverCategoria(f, dir) {
-  var grupo = S.categorias.slice().sort(function (a, b) { return a.orden - b.orden; });
+  var grupo = S.categorias.filter(function (x) { return x.clase === f.cat.clase; }).sort(function (a, b) { return a.orden - b.orden; });
   var i = grupo.indexOf(f.cat), j = i + dir;
   if (i < 0 || j < 0 || j >= grupo.length) return;
   var o = grupo[j].orden; grupo[j].orden = f.cat.orden; f.cat.orden = o;
@@ -530,6 +530,7 @@ $('mesFoco').onchange = function () { elegirMes($('mesFoco').value); };
 $('bMesAnt').onclick = function () { elegirMes(sumarMesP(S.mesFoco, -1)); };
 $('bMesSig').onclick = function () { elegirMes(sumarMesP(S.mesFoco, 1)); };
 $('bHoy').onclick = function () { elegirMes(S.mesHoy); };
+$('bPlegar').onclick = plegarTodo;
 iniciarGrilla();
 iniciar();
 </script>

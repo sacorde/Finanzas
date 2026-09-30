@@ -215,7 +215,8 @@ function api_moverCategoria(nombre, dir) {
     var m = cargarModelo_();
     renumerar_(m);
     var i = m.categorias.map(function (c) { return c.nombre; }).indexOf(nombre), j = i + dir;
-    if (i >= 0 && j >= 0 && j < m.categorias.length) { var o = m.categorias[j].orden; m.categorias[j].orden = m.categorias[i].orden; m.categorias[i].orden = o; }
+    // Solo dentro de su grupo (ingresos, gastos o ahorro)
+    if (i >= 0 && j >= 0 && j < m.categorias.length && m.categorias[j].clase === m.categorias[i].clase) { var o = m.categorias[j].orden; m.categorias[j].orden = m.categorias[i].orden; m.categorias[i].orden = o; }
     guardarConceptos_(m);
     return estructura_(m);
   });

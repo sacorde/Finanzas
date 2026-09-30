@@ -138,6 +138,16 @@ test('filas de la grilla: categorías con color, sus filas y filas nuevas', () =
   assert.strictEqual(cerr.filter((t) => t === 'cat').length, 5);
 });
 
+test('filas agrupadas en ingresos → gastos → ahorro, con su grupo', () => {
+  const cats = [{ nombre: 'Ahorro', clase: 'A', orden: 1 }, { nombre: 'Eventuales', clase: 'G', orden: 9 }, { nombre: 'Vivienda', clase: 'G', orden: 2 }, { nombre: 'Ingresos', clase: 'I', orden: 5 }];
+  const con = [{ id: '1', nombre: 'Luz', categoria: 'Vivienda', clase: 'G', orden: 1 }, { id: '2', nombre: 'Salario', categoria: 'Ingresos', clase: 'I', orden: 1 }];
+  const f = P.construirFilas(con, cats, { colapsadas: { Vivienda: true }, nuevos: [{ t: 'nuevacat' }] });
+  assert.deepStrictEqual([...f.map((x) => x.t + ':' + (x.c ? x.c.nombre : x.cat ? x.cat.nombre : '') + ':' + x.grupo)],
+    ['cat:Ingresos:I', 'item:Salario:I', 'cat:Vivienda:G', 'cat:Eventuales:G', 'cat:Ahorro:A', 'nuevacat::null']);
+  assert.strictEqual(f[2].cerrada, true, 'plegada: la fila de categoría muestra la suma');
+  assert.strictEqual(f[0].cerrada, false, 'desplegada: solo divisor');
+});
+
 test('línea de tiempo igual en cliente y servidor', () => {
   const idx = { a: { '2024-03': {} } };
   const cli = P.lineaDeTiempoP(idx, '2026-09-28', 12);

@@ -172,27 +172,33 @@ function indexarValoresP(filas) {
   return idx;
 }
 
+var ORDEN_CLASE = { I: 0, G: 1, A: 2 };
+function grupoIdx(clase) { return ORDEN_CLASE.hasOwnProperty(clase) ? ORDEN_CLASE[clase] : 1; }
+
 /**
- * Filas de la grilla: cada categoría (con su color) y debajo sus conceptos.
+ * Filas de la grilla, agrupadas en ingresos → gastos → ahorro: cada categoría (con su color) y debajo sus conceptos.
+ * Cada fila lleva `grupo` (I, G, A; null en la fila de categoría nueva).
  * @param {Object} opts {colapsadas:{nombre:true}, visible:function(concepto):bool, nuevos:[{t:'nuevo', categoria}|{t:'nuevacat'}]}
  */
 function construirFilas(conceptos, categorias, opts) {
   opts = opts || {};
   var colapsadas = opts.colapsadas || {}, visible = opts.visible || function () { return true; }, nuevos = opts.nuevos || [];
   var orden = function (a, b) { return a.orden - b.orden; };
-  var cats = categorias.slice().sort(orden);
+  var cats = categorias.slice();
   conceptos.forEach(function (c) {
     if (!cats.some(function (k) { return k.nombre === c.categoria; })) cats.push({ nombre: c.categoria, clase: c.clase, tipo: c.tipo, color: '', orden: 1e9 });
   });
+  cats.sort(function (a, b) { return grupoIdx(a.clase) - grupoIdx(b.clase) || a.orden - b.orden; });
   var filas = [];
   cats.forEach(function (cat) {
     var items = conceptos.filter(function (c) { return c.categoria === cat.nombre; }).sort(orden);
-    filas.push({ t: 'cat', cat: cat, key: cat.nombre, conceptos: items });
+    var grupo = ['I', 'G', 'A'][grupoIdx(cat.clase)];
+    filas.push({ t: 'cat', cat: cat, key: cat.nombre, conceptos: items, grupo: grupo, cerrada: !!colapsadas[cat.nombre] });
     if (colapsadas[cat.nombre]) return;
-    items.forEach(function (c) { if (visible(c)) filas.push({ t: 'item', c: c, cat: cat }); });
-    nuevos.forEach(function (n) { if (n.t === 'nuevo' && n.categoria === cat.nombre) filas.push({ t: 'nuevo', categoria: cat.nombre, cat: cat }); });
+    items.forEach(function (c) { if (visible(c)) filas.push({ t: 'item', c: c, cat: cat, grupo: grupo }); });
+    nuevos.forEach(function (n) { if (n.t === 'nuevo' && n.categoria === cat.nombre) filas.push({ t: 'nuevo', categoria: cat.nombre, cat: cat, grupo: grupo }); });
   });
-  nuevos.forEach(function (n) { if (n.t === 'nuevacat') filas.push({ t: 'nuevacat' }); });
+  nuevos.forEach(function (n) { if (n.t === 'nuevacat') filas.push({ t: 'nuevacat', grupo: null }); });
   return filas;
 }
 

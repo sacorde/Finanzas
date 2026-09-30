@@ -6,6 +6,7 @@ App web de finanzas personales que se usa **como un Excel** y guarda todo en **G
 
 - **Planilla tipo Excel, todo en celdas.** Conceptos en filas y meses en columnas. Categorías, nombres y montos se escriben en la grilla; al lado del nombre se ve el día de pago del mes elegido y el medio de pago entre paréntesis, ej. *Luz (1) (DA)*, *Alquiler (28) (T)* en febrero y *(31)* en marzo. DA = débito automático, T = transferencia, EF = efectivo, MP = Mercado Pago. Acepta cuentas (`=10615+178223`), copiar y pegar, deshacer, y muestra la suma de la selección.
 - **Cualquier mes.** Con el selector ‹ mes › vas a cualquier mes pasado o futuro para cargarlo o corregirlo.
+- **Balance arriba y grupos a la izquierda.** Ingresos, Gastos, Ahorro e inversión y **Resultado** (ingresos − gastos, en verde o rojo). Una columna vertical agrupa la planilla en Balance · Ingresos · Gastos · Ahorro e inversión.
 - **Categorías con color, sin subcategorías.** Ingresos (Salario, Aguinaldo, Bonos, Otros), Vivienda, Servicios, Suscripciones, Transporte, Supermercado, Préstamos, Ahorro e Inversión y Eventuales. Cada una tiene su color y un **+** al lado del nombre para agregar una fila.
 - **Arrastre de precios.** Si cargás un aumento en septiembre, los meses siguientes se actualizan solos. Lo que cargás vos se ve en negro; lo que estima el sistema, en *gris itálica*.
 - **Siempre en el mes actual.** El mes elegido (o *Hoy*) queda como primera columna, resaltado, y los años anteriores se pliegan a su total.
@@ -81,7 +82,7 @@ Todo se agrega y se modifica en las celdas:
 | Deshacer / rehacer | Ctrl+Z / Ctrl+Y. |
 | Confirmar un estimado | Clic derecho → **Confirmar**, o escribir el mismo valor. |
 | Meses futuros, color | Clic derecho sobre la fila o la categoría. |
-| Plegar | Clic en la flecha de una categoría, o en un año. |
+| Plegar | Clic en la flecha de una categoría (plegada muestra la suma de sus filas; desplegada es solo un divisor), **⊟ Plegar todo / ⊞ Desplegar todo** en la barra, o clic en un año. |
 | Carga rápida | Tecla `/` o la barra ⚡ de arriba. |
 
 Los cambios se guardan solos: arriba a la derecha dice *Guardando…* y después *Guardado*.

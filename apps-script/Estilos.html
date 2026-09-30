@@ -79,11 +79,28 @@
 
   .grilla-wrap { flex: 1; min-height: 0; margin: 0 16px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); overflow: hidden; display: flex; flex-direction: column; box-shadow: var(--shadow); }
   .grilla { flex: 1; overflow: auto; position: relative; outline: none; }
-  table.g { border-collapse: separate; border-spacing: 0; font-size: 13px; }
+  table.g { border-collapse: separate; border-spacing: 0; font-size: 13px; --gr: 28px; }
+  /* Columna de grupo (Balance · Ingresos · Gastos · Ahorro e inversión): solo informativa */
+  table.g .gr { position: sticky; left: 0; z-index: 4; width: var(--gr); min-width: var(--gr); max-width: var(--gr); padding: 0; text-align: center; vertical-align: top;
+    border-right: 1px solid var(--line); background: var(--g-bg, var(--surface3)); color: var(--g-ink, var(--muted)); }
+  table.g .gr span { display: inline-block; position: sticky; top: 176px; padding: 12px 0; writing-mode: vertical-rl; transform: rotate(180deg);
+    font-size: 10.5px; font-weight: 800; letter-spacing: .12em; text-transform: uppercase; white-space: nowrap; }
+  table.g thead .gr span { position: static; }
+  table.g thead .gr, table.g thead tr.res > .gr { z-index: 7; vertical-align: middle; }
+  /* Grupo de pocas filas (ej. categoría plegada): etiqueta corta que no estira la fila */
+  table.g td.gr.corto { position: sticky; }
+  table.g td.gr.corto span { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; padding: 0; letter-spacing: .06em; overflow: hidden; }
+  table.g .gr-B { --g-bg: var(--surface3); --g-ink: var(--ink2); }
+  table.g .gr-I { --g-bg: var(--sec-I-bg); --g-ink: var(--sec-I); box-shadow: inset 3px 0 0 var(--sec-I); }
+  table.g .gr-G { --g-bg: var(--sec-G-bg); --g-ink: var(--sec-G); box-shadow: inset 3px 0 0 var(--sec-G); }
+  table.g .gr-A { --g-bg: var(--sec-A-bg); --g-ink: var(--sec-A); box-shadow: inset 3px 0 0 var(--sec-A); }
+  table.g tr.sep-grupo td { height: 10px; padding: 0; border: 0; background: var(--page); }
+  table.g tr.resultado > * { font-size: 13.5px; }
+  table.g tr.resultado td.m, table.g tr.resultado td.t { font-weight: 800; }
   table.g th, table.g td { height: var(--row); padding: 0 10px; white-space: nowrap; border-bottom: 1px solid var(--grid); border-right: 1px solid var(--grid); background: var(--surface); }
   table.g td.m, table.g th.m { min-width: 104px; max-width: 104px; text-align: right; font-variant-numeric: tabular-nums; }
   table.g td.t, table.g th.t { min-width: 118px; text-align: right; font-weight: 700; background: var(--surface2); font-variant-numeric: tabular-nums; }
-  table.g .n { position: sticky; left: 0; z-index: 2; min-width: 290px; max-width: 290px; overflow: hidden; text-overflow: ellipsis; text-align: left; border-right: 1px solid var(--line); }
+  table.g .n { position: sticky; left: var(--gr); z-index: 2; min-width: 290px; max-width: 290px; overflow: hidden; text-overflow: ellipsis; text-align: left; border-right: 1px solid var(--line); }
   table.g thead th { position: sticky; z-index: 3; }
   table.g thead tr.anios th { top: 0; height: 26px; background: var(--surface3); color: var(--ink2); font-size: 11px; font-weight: 700; letter-spacing: .04em; cursor: pointer; text-align: center; }
   table.g thead tr.anios th:hover { color: var(--accent-ink); }
@@ -100,8 +117,9 @@
   .res-et { display: flex; align-items: center; gap: 8px; }
   .res-et i { width: 8px; height: 8px; border-radius: 2px; display: inline-block; }
 
-  table.g tr.cat > * { background: color-mix(in srgb, var(--cat) 9%, var(--surface)); font-weight: 700; color: var(--ink2); height: 34px; border-top: 6px solid var(--surface); }
-  table.g tbody tr.cat:first-child > * { border-top: 0; }
+  table.g tr.cat > * { background: color-mix(in srgb, var(--cat) 9%, var(--surface)); font-weight: 700; color: var(--ink2); height: 32px; }
+  table.g tr.cat:not(.cerrado) > td:not(.n):not(.gr) { background: color-mix(in srgb, var(--cat) 4%, var(--surface)); border-bottom-color: color-mix(in srgb, var(--cat) 35%, var(--grid)); }
+  table.g tr.cat.cerrado > td:not(.gr) { border-bottom-color: color-mix(in srgb, var(--cat) 25%, var(--grid)); }
   table.g tr.cat .n { color: var(--cat); box-shadow: inset 5px 0 0 var(--cat); font-size: 13.5px; }
   table.g tr.cat .n .tn { color: var(--cat); letter-spacing: .01em; display: inline-block; max-width: calc(100% - 116px); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; vertical-align: middle; }
   .punto { width: 9px; height: 9px; border-radius: 3px; background: var(--cat); display: inline-block; margin-right: 8px; flex: none; }
@@ -114,7 +132,7 @@
   .mas:hover { background: var(--surface); }
   table.g tr.cat .mas { color: var(--cat); opacity: .8; border-color: color-mix(in srgb, var(--cat) 35%, transparent); }
   table.g tr.cat .mas:hover { background: var(--cat); color: #fff; opacity: 1; }
-  table.g tr.agregar-cat td { height: 38px; border-top: 6px solid var(--surface); }
+  table.g tr.agregar-cat td { height: 38px; }
   table.g tr.agregar-cat .mas { opacity: .7; color: var(--ink2); border-color: var(--line); }
   table.g thead tr.meses .ayuda-n { text-transform: none; }
   table.g td.n .caret { cursor: pointer; }
@@ -124,7 +142,7 @@
   table.g th.hoy.foco { box-shadow: inset 0 -3px 0 #fff; }
   table.g td.foco:not(.hoy) { box-shadow: inset 0 0 0 9999px color-mix(in srgb, var(--accent) 5%, transparent); }
   table.g .fin-anio { border-right: 2px solid var(--line); }
-  table.g thead tr.anios th.anio span { position: sticky; left: 302px; padding: 0 8px; }
+  table.g thead tr.anios th.anio span { position: sticky; left: 330px; padding: 0 8px; }
   table.g thead tr.anios th.anio { text-align: left; }
   .ayuda-n { font-size: 11px; font-weight: 500; color: var(--muted); }
   .selector-mes { display: flex; align-items: center; gap: 4px; }
@@ -273,6 +291,8 @@
     .grilla-wrap { margin: 0 8px; }
     .barra { padding: 8px; }
     table.g .n { min-width: 170px; max-width: 170px; }
+    table.g { --gr: 20px; }
+    table.g .gr span { font-size: 9px; letter-spacing: .08em; }
     table.g tr.item .n .meta { display: none; }
     table.g tr.cat .cuenta-filas { display: none; }
     table.g tr.cat .n .tn { max-width: 64px; }

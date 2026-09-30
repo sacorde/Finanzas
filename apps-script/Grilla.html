@@ -19,9 +19,10 @@ function sumaConceptos(lista, mes) {
   return hay ? s : null;
 }
 function resumenMes(clase, mes) {
-  if (clase === 'L') {
-    var i = resumenMes('I', mes), g = resumenMes('G', mes), a = resumenMes('A', mes);
-    return i === null && g === null && a === null ? null : (i || 0) - (g || 0) - (a || 0);
+  if (clase === 'R') {
+    // Resultado: ingresos − gastos
+    var i = resumenMes('I', mes), g = resumenMes('G', mes);
+    return i === null && g === null ? null : (i || 0) - (g || 0);
   }
   return sumaConceptos(S.conceptos.filter(function (c) { return c.clase === clase; }), mes);
 }
@@ -66,7 +67,7 @@ function editable(r, k) { return !!tipoCelda(r, k); }
 function valorFilaCol(f, col) {
   var fn;
   if (f.t === 'item') fn = function (m) { return montoDe(f.c, m); };
-  else if (f.t === 'cat') fn = function (m) { return sumaConceptos(f.conceptos, m); };
+  else if (f.t === 'cat' && f.cerrada) fn = function (m) { return sumaConceptos(f.conceptos, m); };
   else return null;
   if (col.t === 'mes') return fn(col.mes);
   if (col.t === 'tot') return totalAnio(fn, col.anio);
@@ -81,7 +82,8 @@ function dibujarGrilla() {
   var claseMes = function (c, base) { return base + (c.mes === mesHoy ? ' hoy' : '') + (c.mes === foco ? ' foco' : '') + (c.t === 'mes' && c.mes.slice(5) === '12' ? ' fin-anio' : ''); };
   h.push('<table class="g"><thead>');
   // Años
-  h.push('<tr class="anios"><th class="n" data-k="0">Concepto</th>');
+  var nCols = G.cols.length + 1;
+  h.push('<tr class="anios"><th class="gr gr-esq" rowspan="2"></th><th class="n" data-k="0">Concepto</th>');
   var i = 1;
   while (i < G.cols.length) {
     var a = G.cols[i].anio, n = 0;
@@ -96,18 +98,34 @@ function dibujarGrilla() {
   });
   h.push('</tr>');
   // Resumen fijo arriba
-  [['I', 'Ingresos', 'var(--sec-I)'], ['G', 'Gastos', 'var(--s2)'], ['A', 'Ahorro e inversión', 'var(--sec-A)'], ['L', 'Libre del mes', 'var(--ink)']].forEach(function (x, j) {
-    h.push('<tr class="res res' + (j + 1) + '"><td class="n"><span class="res-et"><i style="background:' + x[2] + '"></i>' + x[1] + '</span></td>');
+  // Balance fijo arriba
+  [['I', 'Ingresos', 'var(--sec-I)'], ['G', 'Gastos', 'var(--sec-G)'], ['A', 'Ahorro e inversión', 'var(--sec-A)'], ['R', 'Resultado', 'var(--ink)']].forEach(function (x, j) {
+    h.push('<tr class="res res' + (j + 1) + (x[0] === 'R' ? ' resultado' : '') + '">' + (j === 0 ? '<td class="gr gr-B" rowspan="4"><span>Balance</span></td>' : '') +
+      '<td class="n"><span class="res-et"><i style="background:' + x[2] + '"></i>' + x[1] + '</span></td>');
     G.cols.forEach(function (c) {
       if (c.t === 'nombre') return;
       var v = c.t === 'mes' ? resumenMes(x[0], c.mes) : totalAnio(function (m) { return resumenMes(x[0], m); }, c.anio);
-      var cls = claseMes(c, c.t === 'mes' ? 'm' : 't') + (x[0] === 'L' && v !== null ? (v < 0 ? ' neg' : ' pos') : '');
+      var cls = claseMes(c, c.t === 'mes' ? 'm' : 't') + (x[0] === 'R' && v !== null && Math.round(v) !== 0 ? (v < 0 ? ' neg' : ' pos') : '');
       h.push('<td class="' + cls + '">' + fmtN(v) + '</td>');
     });
     h.push('</tr>');
   });
   h.push('</thead><tbody>');
+  var NOMBRE_GRUPO = { I: 'Ingresos', G: 'Gastos', A: 'Ahorro e inversión' };
+  var CORTO_GRUPO = { I: ['Ing', 'Ingres.', 'Ingresos'], G: ['Gas', 'Gastos', 'Gastos'], A: ['Aho', 'Ahorro', 'Ahorro'] };
   G.filas.forEach(function (f, r) {
+    // Columna de grupo: separación y una celda vertical por grupo (ingresos, gastos, ahorro)
+    var gr = '';
+    if (!f.grupo) gr = '<td class="gr"></td>';
+    else if (r === 0 || G.filas[r - 1].grupo !== f.grupo) {
+      var largo = 1;
+      while (r + largo < G.filas.length && G.filas[r + largo].grupo === f.grupo) largo++;
+      h.push('<tr class="sep-grupo"><td colspan="' + nCols + '"></td></tr>');
+      // Si el grupo tiene pocas filas (ej. plegado), va una etiqueta corta que no agranda las filas
+      var corto = largo <= 3;
+      gr = '<td class="gr gr-' + f.grupo + (corto ? ' corto' : '') + '" rowspan="' + largo + '" title="' + NOMBRE_GRUPO[f.grupo] + '"><span>' +
+        (corto ? CORTO_GRUPO[f.grupo][Math.min(largo, 3) - 1] : NOMBRE_GRUPO[f.grupo]) + '</span></td>';
+    }
     var celdas = function () {
       G.cols.forEach(function (c, k) {
         if (c.t === 'nombre') return;
@@ -116,24 +134,25 @@ function dibujarGrilla() {
       });
     };
     if (f.t === 'cat') {
-      var cerrada = S.colapsadas[f.key];
-      h.push('<tr class="cat' + (cerrada ? ' cerrado' : '') + '" data-key="' + esc(f.key) + '" style="--cat:' + catColor(f.cat) + '"><td class="n" data-f="' + r + '" data-k="0"><span class="caret" title="' + (cerrada ? 'Mostrar' : 'Ocultar') + ' filas">▾</span><i class="punto"></i><span class="tn">' + esc(f.cat.nombre) + '</span>' +
+      // Desplegada es solo un divisor; plegada muestra la suma de sus filas
+      var cerrada = f.cerrada;
+      h.push('<tr class="cat' + (cerrada ? ' cerrado' : '') + '" data-key="' + esc(f.key) + '" style="--cat:' + catColor(f.cat) + '">' + gr + '<td class="n" data-f="' + r + '" data-k="0" title="' + (cerrada ? 'Plegada: muestra la suma de sus filas' : 'Clic en ▾ para plegar y ver la suma') + '"><span class="caret" title="' + (cerrada ? 'Mostrar' : 'Ocultar') + ' filas">▾</span><i class="punto"></i><span class="tn">' + esc(f.cat.nombre) + '</span>' +
         '<button class="lapiz" data-editar-cat="1" title="Editar la categoría ' + esc(f.cat.nombre) + '" aria-label="Editar la categoría ' + esc(f.cat.nombre) + '">✎</button>' +
         '<button class="mas" data-mas="fila" title="Agregar una fila en ' + esc(f.cat.nombre) + '">+</button><span class="cuenta-filas">' + f.conceptos.length + '</span></td>');
       celdas();
       h.push('</tr>');
     } else if (f.t === 'nuevacat') {
-      h.push('<tr class="cat nueva"><td class="n" data-f="' + r + '" data-k="0"><span class="placeholder">Nombre de la categoría…</span></td>');
+      h.push('<tr class="cat nueva">' + gr + '<td class="n" data-f="' + r + '" data-k="0"><span class="placeholder">Nombre de la categoría…</span></td>');
       celdas();
       h.push('</tr>');
     } else if (f.t === 'nuevo') {
-      h.push('<tr class="item nueva" style="--cat:' + catColor(f.cat) + '"><td class="n" data-f="' + r + '" data-k="0"><span class="placeholder">Nombre…</span></td>');
+      h.push('<tr class="item nueva" style="--cat:' + catColor(f.cat) + '">' + gr + '<td class="n" data-f="' + r + '" data-k="0"><span class="placeholder">Nombre…</span></td>');
       celdas();
       h.push('</tr>');
     } else {
       var c0 = f.c, meta = resumenConcepto(c0), dia = diaDePago(S.venc, c0.id, foco);
       var titulo = c0.nombre + (dia ? ' · se paga el ' + dia + ' de ' + etiquetaMesP(foco).toLowerCase() : '') + (c0.medio ? ' · ' + c0.medio : '');
-      h.push('<tr class="item' + (c0.tipo === 'eventual' ? ' ev' : '') + '" style="--cat:' + catColor(f.cat) + '"><td class="n" data-f="' + r + '" data-k="0" title="' + esc(titulo) + '">' +
+      h.push('<tr class="item' + (c0.tipo === 'eventual' ? ' ev' : '') + '" style="--cat:' + catColor(f.cat) + '">' + gr + '<td class="n" data-f="' + r + '" data-k="0" title="' + esc(titulo) + '">' +
         '<button class="lapiz" data-editar="1" title="Editar ' + esc(c0.nombre) + '" aria-label="Editar ' + esc(c0.nombre) + '">✎</button>' +
         (meta ? '<span class="meta">' + esc(meta) + '</span>' : '') +
         '<span class="tn">' + esc(c0.nombre) + '</span>' + (dia ? '<span class="dia">(' + dia + ')</span>' : '') +
@@ -151,7 +170,7 @@ function dibujarGrilla() {
       h.push('</tr>');
     }
   });
-  h.push('<tr class="agregar-cat"><td class="n"><button class="mas txt" data-mas="nuevacat" title="Agregar una categoría">+ categoría</button></td><td colspan="' + (G.cols.length - 1) + '"></td></tr>');
+  h.push('<tr class="sep-grupo"><td colspan="' + nCols + '"></td></tr><tr class="agregar-cat"><td class="gr"></td><td class="n"><button class="mas txt" data-mas="nuevacat" title="Agregar una categoría">+ categoría</button></td><td colspan="' + (G.cols.length - 1) + '"></td></tr>');
   h.push('</tbody></table>');
   var cont = $('grilla');
   var sl = cont.scrollLeft, st = cont.scrollTop;
@@ -160,6 +179,24 @@ function dibujarGrilla() {
   cont.scrollLeft = sl; cont.scrollTop = st;
   if (G.primera) { G.primera = false; irAMes(S.mesFoco); }
   pintarSeleccion();
+  actualizarBotonPlegar();
+}
+
+/** Plegar todo / desplegar todo (el botón de la barra). */
+function todoPlegado() { return S.categorias.length > 0 && S.categorias.every(function (c) { return S.colapsadas[c.nombre]; }); }
+function actualizarBotonPlegar() {
+  var b = $('bPlegar');
+  if (!b) return;
+  var todo = todoPlegado();
+  b.innerHTML = todo ? '⊞ Desplegar todo' : '⊟ Plegar todo';
+  b.title = todo ? 'Mostrar las filas de todas las categorías' : 'Plegar todas las categorías y ver solo sus totales';
+}
+function plegarTodo() {
+  var plegar = !todoPlegado();
+  S.categorias.forEach(function (c) { S.colapsadas[c.nombre] = plegar; });
+  guardarPreferencias();
+  G.sel = null;
+  dibujarGrilla();
 }
 
 /** Lleva la vista (y la selección) a la columna de un mes, que queda primera a la izquierda. */
@@ -214,7 +251,9 @@ function pintarSeleccion() {
 
 function asegurarVisible(el) {
   if (!el || el.classList.contains('n')) return;
-  var cont = $('grilla'), anchoN = cont.querySelector('thead .n').offsetWidth, altoCab = cont.querySelector('thead').offsetHeight;
+  var cont = $('grilla'), altoCab = cont.querySelector('thead').offsetHeight;
+  // Ancho fijo a la izquierda: columna de grupo + columna de conceptos
+  var anchoN = cont.querySelector('thead .n').getBoundingClientRect().right - cont.getBoundingClientRect().left;
   var x = el.offsetLeft, y = el.offsetTop;
   if (x - anchoN < cont.scrollLeft) cont.scrollLeft = x - anchoN;
   else if (x + el.offsetWidth > cont.scrollLeft + cont.clientWidth) cont.scrollLeft = x + el.offsetWidth - cont.clientWidth;
@@ -246,7 +285,7 @@ function editar(inicial) {
   input.className = 'editor' + (tipo === 'mes' ? ' num' : ' txt');
   var tabla = el.closest('table'), cont = $('grilla');
   var fijo = el.classList.contains('n');
-  input.style.left = (fijo ? cont.scrollLeft : el.offsetLeft + tabla.offsetLeft) + 'px';
+  input.style.left = (fijo ? cont.scrollLeft + el.getBoundingClientRect().left - cont.getBoundingClientRect().left : el.offsetLeft + tabla.offsetLeft) + 'px';
   input.style.top = (el.offsetTop + tabla.offsetTop) + 'px';
   input.style.width = Math.max(el.offsetWidth, tipo === 'mes' ? 150 : 200) + 'px';
   input.style.height = el.offsetHeight + 'px';
