@@ -54,3 +54,16 @@ test('"No proyectar" limpia estimados', () => {
   const celdas = [conf(100), est(100), vacia()];
   assert.deepStrictEqual(plano(G.calcularProyeccion(celdas, 1, 2, 'No proyectar', 0)), [{ i: 1, borrar: true }]);
 });
+
+test('meses específicos y aumento fijo mensual', () => {
+  // ene..dic; cargado en junio (idx 5); hoy = septiembre (idx 8)
+  const celdas = Array.from({ length: 24 }, (_, i) => (i === 5 ? { v: 100, f: '', proy: false } : { v: '', f: '', proy: false }));
+  const numMes = Array.from({ length: 24 }, (_, i) => (i % 12) + 1);
+  const ch = G.calcularProyeccion(celdas, 8, 23, 'Repetir', 0, { meses: [6, 12], numMes });
+  assert.deepStrictEqual([...ch.map((x) => x.i)], [11, 17, 23]);
+  assert.ok(ch.every((x) => x.v === 100));
+  const au = G.calcularProyeccion(celdas, 8, 23, 'Aumento 10%', 0, { meses: [12], numMes });
+  assert.deepStrictEqual(JSON.parse(JSON.stringify(au.map((x) => [x.i, x.v]))), [[11, Math.round(100 * Math.pow(1.1, 6))], [23, Math.round(100 * Math.pow(1.1, 18))]]);
+  // Todos los meses: un mes vacío antes de hoy sigue siendo baja
+  assert.deepStrictEqual(G.calcularProyeccion(celdas, 8, 23, 'Repetir', 0).length, 0);
+});

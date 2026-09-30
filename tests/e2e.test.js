@@ -75,7 +75,7 @@ test('categorías de un solo nivel, con color; conceptos con vencimiento y medio
   assert.strictEqual(luz.categoria, 'Servicios');
   assert.strictEqual(d.conceptos.find((c) => c.nombre === 'Netflix').medio, 'Débito automático');
   assert.strictEqual(d.conceptos.find((c) => c.nombre === 'Ahorro del Mes').clase, 'A');
-  assert.strictEqual(d.conceptos.find((c) => c.nombre === 'Otros').proyeccion, 'No proyectar');
+  assert.strictEqual(d.conceptos.find((c) => c.nombre === 'Otros').meses, 'no', '"No proyectar" pasa a "no se repite"');
   assert.ok(d.venc[luz.id]['2026-10'], 'vencimiento calculado');
 });
 
@@ -257,6 +257,28 @@ test('ahorro como porcentaje de los ingresos (fórmula)', () => {
   G.api_guardarCeldas([{ c: sal.id, mes: '2026-11', texto: '' }]);
 });
 
+test('repetición en meses específicos (aguinaldo) y aumento fijo por mes', () => {
+  const ag = concepto('Aguinaldo');
+  G.api_guardarCeldas([{ c: ag.id, mes: '2026-06', texto: '500000' }]);
+  let r = plano(G.api_guardarConcepto({ id: ag.id, meses: '12,6' }));
+  assert.strictEqual(r.conceptos.find((c) => c.id === ag.id).meses, '6,12');
+  let d = G.api_datos();
+  assert.deepStrictEqual(plano(valor(d, ag.id, '2026-12')).slice(2), [500000, '', 1], 'diciembre toma el último cargado');
+  assert.deepStrictEqual(plano(valor(d, ag.id, '2027-06')).slice(2), [500000, '', 1]);
+  assert.ok(!valor(d, ag.id, '2026-10') && !valor(d, ag.id, '2027-01'), 'los demás meses quedan vacíos');
+  // Aumento fijo del 2% por mes: diciembre = junio × 1,02^6
+  G.api_guardarConcepto({ id: ag.id, proyeccion: 'Aumento 2%' });
+  d = G.api_datos();
+  assert.strictEqual(d.conceptos.find((c) => c.id === ag.id).proyeccion, 'Aumento 2%');
+  assert.strictEqual(valor(d, ag.id, '2026-12')[2], Math.round(500000 * Math.pow(1.02, 6)));
+  // No se repite: se limpian los estimados
+  r = plano(G.api_guardarConcepto({ id: ag.id, meses: 'no', proyeccion: 'Repetir' }));
+  d = G.api_datos();
+  assert.ok(!valor(d, ag.id, '2026-12'));
+  assert.ok(valor(d, ag.id, '2026-06'), 'lo cargado queda');
+  G.api_guardarCeldas([{ c: ag.id, mes: '2026-06', texto: '' }]);
+});
+
 test('una base de la versión 5 sin columna "formula" se actualiza sola', () => {
   const G5 = cargar({ hoy: HOY });
   const env5 = crearEntorno(G5);
@@ -266,7 +288,8 @@ test('una base de la versión 5 sin columna "formula" se actualiza sola', () => 
   hoja('Valores', [['concepto', 'mes', 'monto', 'cuenta', 'estado'], ['a1', '2026-09', 100, '', 'confirmado']]);
   const d = plano(G5.api_datos());
   assert.strictEqual(d.conceptos[0].vence, '1er hábil');
-  assert.strictEqual(env5.ss.getSheetByName('Conceptos').getRange(1, 9).getValue(), 'formula');
+  assert.strictEqual(env5.ss.getSheetByName('Conceptos').getRange(1, 8).getValue(), 'meses');
+  assert.strictEqual(env5.ss.getSheetByName('Conceptos').getRange(1, 10).getValue(), 'formula');
   assert.deepStrictEqual(plano(G5.api_hojasSobrantes()), []);
 });
 
@@ -393,9 +416,9 @@ test('actualiza sola una base de la versión 4 a categorías de un solo nivel', 
   assert.ok(valor(d, 'e1', '2026-03'));
   assert.ok(valor(d, 'g1', '2026-10'), 'sigue proyectando');
   assert.deepStrictEqual(d.categorias.map((c) => c.nombre).length, 9);
-  assert.deepStrictEqual(env4.ss.getSheetByName('Conceptos').getRange(1, 1, 1, 10).getValues()[0], ['id', 'nombre', 'categoria', 'clase', 'tipo', 'vence', 'medio', 'proyeccion', 'formula', 'orden']);
+  assert.deepStrictEqual(env4.ss.getSheetByName('Conceptos').getRange(1, 1, 1, 11).getValues()[0], ['id', 'nombre', 'categoria', 'clase', 'tipo', 'vence', 'medio', 'meses', 'proyeccion', 'formula', 'orden']);
   assert.deepStrictEqual(env4.ss.getSheetByName('Categorias').getRange(1, 1, 1, 5).getValues()[0], ['nombre', 'clase', 'tipo', 'color', 'orden']);
-  assert.strictEqual(env4.ss.getSheetByName('Conceptos').getLastColumn(), 10);
+  assert.strictEqual(env4.ss.getSheetByName('Conceptos').getLastColumn(), 11);
   assert.deepStrictEqual(plano(G4.api_hojasSobrantes()), [], 'las tablas actualizadas no se ofrecen para borrar');
   assert.strictEqual(plano(G4.api_datos()).conceptos.length, d.conceptos.length, 'no se repite');
 });

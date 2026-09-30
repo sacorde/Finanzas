@@ -251,12 +251,50 @@ function estaArchivado(c, porMes, mes) {
   return meses.every(function (m) { return m < mes; });
 }
 
+/** Textos según la clase: en ingresos se "cobra", en gastos "vence", en ahorro se "aporta". */
+var TXT_CLASE = {
+  I: { dia: 'Cobro', verbo: 'se cobra', Verbo: 'Se cobra' },
+  G: { dia: 'Vence', verbo: 'se paga', Verbo: 'Se paga' },
+  A: { dia: 'Aporte', verbo: 'se aporta', Verbo: 'Se aporta' }
+};
+function txtClase(clase) { return TXT_CLASE[clase] || TXT_CLASE.G; }
+
+var MESES_C = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
+/** "6,12" → "jun · dic". */
+function mesesCortos(meses) {
+  return String(meses || '').split(',').filter(String).map(function (n) { return MESES_C[Number(n) - 1]; }).join(' · ');
+}
+/** "Aumento 2%" → 2 (null si no es ese modo). */
+function aumentoP(proy) {
+  var m = /^aumento\s+(\d+(?:[.,]\d+)?)\s*%$/i.exec(String(proy || '').trim());
+  return m ? Number(m[1].replace(',', '.')) : null;
+}
+/** Cómo se completan los meses futuros, en palabras. */
+function describirRepeticion(c) {
+  if (c.tipo !== 'fijo') return 'gasto eventual';
+  if (c.meses === 'no') return 'no se repite';
+  var cuando = c.meses ? 'se repite en ' + mesesCortos(c.meses) : 'se repite todos los meses';
+  if (c.formula) return cuando + ' · ƒx';
+  var a = aumentoP(c.proyeccion);
+  var monto = c.proyeccion === 'Promedio 3 meses' ? 'promedio de los últimos 3' : c.proyeccion === 'Ajustar por inflación' ? 'ajustado por inflación' :
+    a !== null ? '+' + String(a).replace('.', ',') + '% por mes' : 'igual al último';
+  return cuando + ' · ' + monto;
+}
+
 /** Indicación de cómo se completan los meses futuros (fórmula ƒx o modo distinto de "Repetir"). */
 function resumenConcepto(c) {
   if (c.tipo !== 'fijo') return '';
+  var partes = [];
+  if (c.meses && c.meses !== 'no') partes.push(mesesCortos(c.meses));
   var f = parsearFormulaP(c.formula);
-  if (f) return 'ƒx' + (f.op === '%' ? ' ' + String(f.n).replace('.', ',') + '%' : '');
-  return c.proyeccion === 'Promedio 3 meses' ? 'prom.' : c.proyeccion === 'Ajustar por inflación' ? '+infl.' : '';
+  if (f) partes.push('ƒx' + (f.op === '%' ? ' ' + String(f.n).replace('.', ',') + '%' : ''));
+  else if (c.meses !== 'no') {
+    var a = aumentoP(c.proyeccion);
+    if (c.proyeccion === 'Promedio 3 meses') partes.push('prom.');
+    else if (c.proyeccion === 'Ajustar por inflación') partes.push('+infl.');
+    else if (a !== null) partes.push('+' + String(a).replace('.', ',') + '%');
+  }
+  return partes.join(' · ');
 }
 
 /**

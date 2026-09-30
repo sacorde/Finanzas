@@ -31,7 +31,9 @@ var FZ = {
 /** Columnas de cada tabla. `texto`: columnas que se guardan como texto plano (evita que Sheets las convierta en fechas o fórmulas). */
 var ESQUEMA = {
   // formula: "Ingresos*20%" (20 % del total de ingresos) o "#<id>*20%" (20 % de otro concepto)
-  Conceptos: { cols: ['id', 'nombre', 'categoria', 'clase', 'tipo', 'vence', 'medio', 'proyeccion', 'formula', 'orden'], texto: ['id', 'nombre', 'categoria', 'clase', 'tipo', 'vence', 'medio', 'proyeccion', 'formula'] },
+  // meses: cuándo se repite ('' todos los meses · 'no' no se repite · '6,12' meses específicos)
+  // proyeccion: con qué monto (Repetir · Promedio 3 meses · Ajustar por inflación · "Aumento 5%")
+  Conceptos: { cols: ['id', 'nombre', 'categoria', 'clase', 'tipo', 'vence', 'medio', 'meses', 'proyeccion', 'formula', 'orden'], texto: ['id', 'nombre', 'categoria', 'clase', 'tipo', 'vence', 'medio', 'meses', 'proyeccion', 'formula'] },
   Valores: { cols: ['concepto', 'mes', 'monto', 'cuenta', 'estado'], texto: ['concepto', 'mes', 'cuenta', 'estado'] },
   Categorias: { cols: ['nombre', 'clase', 'tipo', 'color', 'orden'], texto: ['nombre', 'clase', 'tipo', 'color'] },
   Indices: { cols: ['mes', 'inflacion', 'dolar_oficial', 'dolar_blue', 'origen'], texto: ['mes', 'origen'] },

@@ -148,7 +148,7 @@ function dibujarGrilla() {
       h.push('</tr>');
     } else {
       var c0 = f.c, meta = resumenConcepto(c0), dia = diaDePago(S.venc, c0.id, foco);
-      var titulo = c0.nombre + (dia ? ' · se paga el ' + dia + ' de ' + etiquetaMesP(foco).toLowerCase() : '') + (c0.medio ? ' · ' + c0.medio : '') + (c0.formula ? ' · ƒx ' + describirFormula(c0.formula, S.conceptos) : '');
+      var titulo = c0.nombre + (dia ? ' · ' + txtClase(c0.clase).verbo + ' el ' + dia + ' de ' + etiquetaMesP(foco).toLowerCase() : '') + ' · ' + describirRepeticion(c0) + (c0.medio ? ' · ' + c0.medio : '') + (c0.formula ? ' · ƒx ' + describirFormula(c0.formula, S.conceptos) : '');
       h.push('<tr class="item' + (c0.tipo === 'eventual' ? ' ev' : '') + (S.verTodo && archivada(c0) ? ' archivada' : '') + '" style="--cat:' + catColor(f.cat) + '">' + gr + '<td class="n" data-f="' + r + '" data-k="0" title="' + esc(titulo) + '">' +
         '<button class="lapiz" data-editar="1" title="Editar ' + esc(c0.nombre) + '" aria-label="Editar ' + esc(c0.nombre) + '">✎</button>' +
         (meta ? '<span class="meta">' + esc(meta) + '</span>' : '') +
@@ -265,7 +265,7 @@ function pintarSeleccion() {
     partes.push(esc(f0.c.nombre) + (c0.t === 'mes' ? ' · ' + esc(etiquetaMesP(c0.mes)) : c0.t === 'tot' ? ' · Total ' + c0.anio : ''));
     var v0 = c0.t === 'mes' ? celdaDe(f0.c, c0.mes) : null;
     if (v0) partes.push((v0.e ? (f0.c.formula ? 'calculado: ' + esc(describirFormula(f0.c.formula, S.conceptos)) : 'estimado') : 'cargado') + (v0.c ? ' · =' + esc(v0.c) : ''));
-    if (c0.t === 'nombre') partes.push(esc(f0.c.categoria) + (f0.c.tipo === 'fijo' ? ' · vence: ' + esc(f0.c.vence || '—') + (f0.c.formula ? ' · ƒx ' + esc(describirFormula(f0.c.formula, S.conceptos)) : ' · meses futuros: ' + esc(f0.c.proyeccion)) : ' · gasto eventual') + (f0.c.medio ? ' · ' + esc(f0.c.medio) : '') + ' · <b>✎</b> o F4 para editar');
+    if (c0.t === 'nombre') partes.push(esc(f0.c.categoria) + (f0.c.tipo === 'fijo' ? ' · ' + txtClase(f0.c.clase).dia.toLowerCase() + ': ' + esc(f0.c.vence || '—') + ' · ' + esc(describirRepeticion(f0.c)) + (f0.c.formula ? ' (' + esc(describirFormula(f0.c.formula, S.conceptos)) + ')' : '') : ' · gasto eventual') + (f0.c.medio ? ' · ' + esc(f0.c.medio) : '') + ' · <b>✎</b> o F4 para editar');
   }
   var txt = partes.join(' — ');
   if (n > 1) txt += (txt ? ' · ' : '') + 'Suma <b>$ ' + fmtN(suma) + '</b> · Promedio <b>$ ' + fmtN(suma / n) + '</b> · ' + n + ' celdas';

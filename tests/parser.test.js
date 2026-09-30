@@ -100,6 +100,19 @@ test('fórmulas (ƒx): cliente igual que servidor', () => {
   assert.strictEqual(P.resumenConcepto({ tipo: 'fijo', proyeccion: 'Repetir', formula: 'Gastos+1000' }), 'ƒx');
 });
 
+test('textos por clase y descripción de la repetición', () => {
+  assert.strictEqual(P.txtClase('I').dia, 'Cobro');
+  assert.strictEqual(P.txtClase('G').dia, 'Vence');
+  assert.strictEqual(P.txtClase('A').dia, 'Aporte');
+  const c = (o) => Object.assign({ tipo: 'fijo', meses: '', proyeccion: 'Repetir', formula: '' }, o);
+  assert.strictEqual(P.describirRepeticion(c({})), 'se repite todos los meses · igual al último');
+  assert.strictEqual(P.describirRepeticion(c({ meses: '6,12', proyeccion: 'Aumento 2%' })), 'se repite en jun · dic · +2% por mes');
+  assert.strictEqual(P.describirRepeticion(c({ meses: 'no' })), 'no se repite');
+  assert.strictEqual(P.resumenConcepto(c({ meses: '6,12' })), 'jun · dic');
+  assert.strictEqual(P.resumenConcepto(c({ proyeccion: 'Aumento 5%' })), '+5%');
+  assert.strictEqual(P.resumenConcepto(c({ meses: 'no', proyeccion: 'Ajustar por inflación' })), '');
+});
+
 test('filas archivadas según el mes elegido', () => {
   const ev = { tipo: 'eventual' }, fijo = { tipo: 'fijo' };
   const vac = { '2026-01': { m: 900000 } };

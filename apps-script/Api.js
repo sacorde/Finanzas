@@ -106,7 +106,7 @@ function api_guardarConcepto(c) {
     if (c.id && !existente) throw new Error('Ese concepto ya no existe. Recargá la página.');
     var base = existente || { id: nuevoId_(), categoria: c.categoria, orden: 1e9 };
     var datos = {};
-    ['id', 'nombre', 'categoria', 'vence', 'medio', 'proyeccion', 'formula', 'orden'].forEach(function (k) { datos[k] = c.hasOwnProperty(k) && k !== 'id' && k !== 'orden' ? c[k] : base[k]; });
+    ['id', 'nombre', 'categoria', 'vence', 'medio', 'meses', 'proyeccion', 'formula', 'orden'].forEach(function (k) { datos[k] = c.hasOwnProperty(k) && k !== 'id' && k !== 'orden' ? c[k] : base[k]; });
     datos.nombre = String(datos.nombre || '').trim();
     if (!datos.nombre) throw new Error('El concepto necesita un nombre.');
     var cat = buscarCategoria_(m.categorias, datos.categoria);
@@ -126,7 +126,8 @@ function api_guardarConcepto(c) {
     var nuevo = normConcepto_(datos, m.categorias);
     if (existente) m.conceptos[m.conceptos.indexOf(existente)] = nuevo; else m.conceptos.push(nuevo);
     guardarConceptos_(m);
-    var recalcular = !existente || c.hasOwnProperty('proyeccion') || c.hasOwnProperty('formula');
+    if (c.hasOwnProperty('meses') && /\d/.test(String(c.meses)) === false && String(c.meses) !== '' && String(c.meses) !== 'no') throw new Error('Elegí al menos un mes.');
+    var recalcular = !existente || c.hasOwnProperty('proyeccion') || c.hasOwnProperty('formula') || c.hasOwnProperty('meses');
     if (recalcular) {
       // Sin fórmula: los meses que calculaba vuelven a proyectarse como siempre
       if (existente && existente.formula && !nuevo.formula) {

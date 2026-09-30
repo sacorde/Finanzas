@@ -12,7 +12,17 @@
  *    Para dar de baja algo, poné 0 en el mes que deja de existir.
  *  - Nunca se pisa un valor que cargaste vos.
  *  - Borrar un mes futuro lo devuelve al estimado automático. Para "no se paga", poné 0.
+ *  - Con meses específicos (ej. aguinaldo en junio y diciembre) solo se completan esos meses,
+ *    tomando el último monto cargado aunque haya meses vacíos en el medio.
+ *
+ * Montos: igual al último · promedio de los últimos 3 · ajustado por inflación · aumento fijo X % por mes.
  */
+
+/** "Aumento 5%" → 0.05 (null si no es ese modo). */
+function aumentoMensual_(modo) {
+  var m = /^aumento\s+(\d+(?:[.,]\d+)?)\s*%$/i.exec(String(modo || '').trim());
+  return m ? Number(m[1].replace(',', '.')) / 100 : null;
+}
 
 function celdaVacia_(c) {
   return !c.f && (c.v === '' || c.v === null || c.v === undefined);
@@ -28,25 +38,30 @@ function numero_(v) {
  * @param {Array<{v:*, f:string, proy:boolean}>} celdas  una por mes (f = cuenta, ej. '=100+50')
  * @param {number} idxInicio  índice del mes actual
  * @param {number} idxFin     último índice a proyectar (inclusive)
- * @param {string} modo       uno de FZ.PROY
+ * @param {string} modo       uno de FZ.PROY o "Aumento X%"
  * @param {number} infl       inflación mensual esperada (0.03 = 3%)
+ * @param {{meses:Array<number>, numMes:Array<number>}=} opts  meses específicos (1–12) y el número de mes de cada celda
  * @return {Array<{i:number, v:*, f:string, borrar:boolean}>} cambios (celdas que quedan estimadas o se limpian)
  */
-function calcularProyeccion(celdas, idxInicio, idxFin, modo, infl) {
+function calcularProyeccion(celdas, idxInicio, idxFin, modo, infl, opts) {
   var cambios = [];
   var ultimo = -1, historia = [];
   var noProyectar = modo === 'No proyectar';
+  var soloMeses = opts && opts.meses && opts.meses.length ? opts.meses : null;
+  var aumento = aumentoMensual_(modo);
   for (var i = 0; i < celdas.length; i++) {
     var c = celdas[i];
     var vacia = celdaVacia_(c);
     if (i < idxInicio) {
-      if (vacia) { ultimo = -1; historia = []; }
+      // Con meses específicos los meses vacíos del medio son normales (no es una baja)
+      if (vacia) { if (!soloMeses) { ultimo = -1; historia = []; } }
       else { ultimo = i; historia.push(numero_(c.v)); }
       continue;
     }
     if (!vacia && !c.proy) { ultimo = i; historia.push(numero_(c.v)); continue; }
     // Celda vacía o estimada dentro de la zona de proyección
-    if (noProyectar || ultimo < 0 || i > idxFin) {
+    var fueraDeMes = soloMeses && soloMeses.indexOf(opts.numMes[i]) < 0;
+    if (noProyectar || ultimo < 0 || i > idxFin || fueraDeMes) {
       // Estimados sin origen o fuera del horizonte se limpian; lo cargado a mano nunca
       if (c.proy && !vacia) cambios.push({ i: i, borrar: true });
       continue;
@@ -55,8 +70,8 @@ function calcularProyeccion(celdas, idxInicio, idxFin, modo, infl) {
     if (modo === 'Promedio 3 meses') {
       var ult3 = historia.slice(-3);
       nuevo = { v: Math.round(ult3.reduce(function (a, b) { return a + b; }, 0) / ult3.length), f: '' };
-    } else if (modo === 'Ajustar por inflación') {
-      nuevo = { v: Math.round(numero_(fuente.v) * Math.pow(1 + (infl || 0), i - ultimo)), f: '' };
+    } else if (modo === 'Ajustar por inflación' || aumento !== null) {
+      nuevo = { v: Math.round(numero_(fuente.v) * Math.pow(1 + (aumento !== null ? aumento : infl || 0), i - ultimo)), f: '' };
     } else if (fuente.f) {
       nuevo = { v: numero_(fuente.v), f: fuente.f }; // copia la cuenta
     } else {

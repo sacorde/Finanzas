@@ -72,6 +72,9 @@ Todo se agrega y se modifica en las celdas:
 | Agregar una categoría | **+ categoría** al final de la planilla, o clic derecho sobre una categoría. |
 | Renombrar | Escribí sobre el nombre (fila o categoría). |
 | Editar un concepto | Lápiz **✎** junto al nombre (o F4, o clic derecho → Editar): se abre un panel a la derecha con nombre, categoría, monto del mes, vencimiento (día del 1 al 28, o último / anteúltimo día, y si es hábil; muestra las fechas que resultan), medio de pago y meses futuros. |
+| Cuándo se repite | En el panel: **Todos los meses**, **Algunos meses** (ej. aguinaldo en junio y diciembre) o **No se repite**. |
+| Con qué monto | **Igual al último**, **Ajustado por inflación**, **Aumento fijo X % por mes** o **Promedio de los últimos 3**. |
+| Cobro / Vence / Aporte | El día se llama *Cobro* en ingresos, *Vence* en gastos y *Aporte* en ahorro e inversión. |
 | Fórmula (ƒx) | En el panel del concepto, botón **ƒx** junto al monto: base (Total de ingresos, Total de gastos u otro concepto), operación (× %, + o −) y número. Ej.: Ingresos × 20 %, Gastos + 1.000.000. Desde el mes actual cada mes se calcula solo; un monto escrito a mano en una celda se respeta. |
 | Archivados | Las filas que no corresponden al mes elegido (gastos eventuales de otros meses, conceptos que se dejaron de pagar) se ocultan. **Mostrar archivados** las muestra; al navegar a su mes aparecen solas. |
 | Editar una categoría | Lápiz **✎** junto al nombre de la categoría: nombre, color, si suma como ingreso, gasto o ahorro, y eliminar. |

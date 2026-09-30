@@ -157,7 +157,7 @@ function actualizarEsquema_() {
       if (tipo === 'eventual' && !v4) return;
       var clase = /^[IGA]$/.test(String(c.clase)) ? String(c.clase) : 'G';
       var cat = asegurarCategoria_(m, mapearCategoria_({ seccion: c.seccion, categoria: c.categoria, nombre: c.nombre, clase: clase, tipo: tipo }), { clase: clase });
-      m.conceptos.push(normConcepto_({ id: c.id, nombre: c.nombre, categoria: cat.nombre, vence: c.vence, medio: c.medio, proyeccion: c.proyeccion, orden: c.orden }, m.categorias));
+      m.conceptos.push(normConcepto_({ id: c.id, nombre: c.nombre, categoria: cat.nombre, vence: c.vence, medio: c.medio, meses: c.meses, proyeccion: c.proyeccion, orden: c.orden }, m.categorias));
     });
     var sh = ss.getSheetByName('Movimientos');
     if (!v4 && sh && sh.getLastRow() > 1 && cabecera_(sh).slice(0, ESQUEMA_MOV_V3.length).join('|') === ESQUEMA_MOV_V3.join('|')) {

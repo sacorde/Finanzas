@@ -3,11 +3,10 @@
  *  - Concepto: nombre, categoría, monto del mes elegido, vencimiento (día 1–28, último / anteúltimo día,
  *    hábil o no, con las fechas que resultan), medio de pago y meses futuros.
  *  - Categoría: nombre, color, cómo suma (ingreso / gasto / ahorro) y eliminar. */
-var AYUDA_PROY = {
-  'Repetir': 'Los meses futuros repiten el último monto cargado.',
-  'Promedio 3 meses': 'Los meses futuros usan el promedio de los últimos 3 meses cargados.',
-  'Ajustar por inflación': 'Los meses futuros suben con la inflación esperada.',
-  'No proyectar': 'Solo cuenta lo que cargues a mano (aguinaldo, bonos, gastos variables).'
+var AYUDA_REP = {
+  todos: 'Los meses siguientes se completan solos (en gris) hasta que cargues el monto real.',
+  algunos: 'Solo en los meses marcados, por ejemplo el aguinaldo en junio y diciembre.',
+  no: 'Solo cuenta lo que cargues a mano en cada mes.'
 };
 var CLASES_CAT = [['I', 'Ingreso'], ['G', 'Gasto'], ['A', 'Ahorro']];
 var PANEL = { modo: null, c: null, cat: null, timer: null, vence: null, tocado: false, color: '', clase: '' };
@@ -63,8 +62,35 @@ function abrirPanel(c) {
   }
   h.push('</div>');
   if (fijo) {
+    // ¿Cuándo se repite? · ¿Con qué monto?
+    var repIni = c.meses === 'no' ? 'no' : c.meses ? 'algunos' : 'todos';
+    var mesesIni = c.meses && c.meses !== 'no' ? c.meses.split(',').map(Number) : [];
+    var aum = aumentoP(c.proyeccion);
+    var proyIni = aum !== null ? 'aumento' : c.proyeccion;
+    PANEL.rep = repIni; PANEL.meses = mesesIni;
+    h.push('<div class="campo-p">¿Cuándo se repite?' +
+      '<div class="seg-p seg-lleno" id="pRep">' + [['todos', 'Todos los meses'], ['algunos', 'Algunos meses'], ['no', 'No se repite']].map(function (o) {
+        return '<button type="button" data-rep="' + o[0] + '" aria-pressed="' + (o[0] === repIni) + '">' + o[1] + '</button>';
+      }).join('') + '</div>' +
+      '<div class="meses-p" id="pMesesSel"' + (repIni === 'algunos' ? '' : ' hidden') + '>' + MESES_C.map(function (m, i) {
+        return '<button type="button" data-mes="' + (i + 1) + '" aria-pressed="' + (mesesIni.indexOf(i + 1) >= 0) + '">' + m + '</button>';
+      }).join('') + '</div>' +
+      '<span class="ayuda-p" id="pRepInfo"></span></div>');
+    var opcion = function (valor, titulo, ayuda, extra) {
+      return '<label class="opcion-p"><input type="radio" name="pProy" value="' + valor + '"' + (valor === proyIni ? ' checked' : '') + '>' +
+        '<span><b>' + titulo + '</b>' + (extra || '') + '<small>' + ayuda + '</small></span></label>';
+    };
+    h.push('<div class="campo-p" id="pMontoCampo">¿Con qué monto?<div class="opciones-p">' +
+      opcion('Repetir', 'Igual al último', 'Repite el último monto que cargaste.') +
+      opcion('Ajustar por inflación', 'Ajustado por inflación', 'Cada mes suma la inflación esperada (' + String(S.inflEsperada).replace('.', ',') + '% mensual).') +
+      opcion('aumento', 'Aumento fijo', 'Cada mes sube ese porcentaje. Ej.: un alquiler que aumenta 5% por mes.',
+        ' <span class="aum-p"><input id="pAum" type="text" inputmode="decimal" autocomplete="off" placeholder="5" value="' + (aum !== null ? String(aum).replace('.', ',') : '') + '">% por mes</span>') +
+      opcion('Promedio 3 meses', 'Promedio de los últimos 3', 'Para gastos que varían mes a mes (luz, supermercado).') +
+      '</div></div>');
+  }
+  if (fijo) {
     var sel = selectorDesdeRegla(c.vence);
-    h.push('<div class="campo-p">Vence' +
+    h.push('<div class="campo-p">' + esc(txtClase(c.clase).dia) +
       '<div class="vence-sel">' +
         '<label class="dia-sel"><span>Día</span><input id="pDia" type="number" min="1" max="28" step="1" inputmode="numeric" placeholder="—" value="' + esc(sel.dia) + '"' + (sel.fin ? ' disabled' : '') + '></label>' +
         '<label class="check"><input type="checkbox" id="pUlt"' + (sel.fin === 'ultimo' ? ' checked' : '') + '> Último día</label>' +
@@ -78,10 +104,9 @@ function abrirPanel(c) {
     '<span class="ayuda-p">Se muestra junto al nombre: Débito automático (DA), Transferencia (T), Efectivo (EF), Mercado Pago (MP), tarjetas (VISA, AMEX…).' +
     (fijo ? ' Con débito automático, el monto se confirma solo el día del vencimiento.' : '') + '</span></label>');
   if (fijo) {
-    h.push('<label class="campo-p" id="pProyCampo"' + (fx ? ' hidden' : '') + '>Meses futuros<select id="pProy">' + S.proyecciones.map(function (x) { return '<option' + (x === c.proyeccion ? ' selected' : '') + '>' + esc(x) + '</option>'; }).join('') + '</select>' +
-      '<span class="ayuda-p" id="pProyInfo">' + esc(AYUDA_PROY[c.proyeccion] || '') + '</span></label>');
+
   }
-  mostrarPanel(catColor(buscarCat(c.categoria)), c.nombre, c.categoria + ' · ' + (fijo ? 'se repite todos los meses' : 'gasto eventual'), h.join(''));
+  mostrarPanel(catColor(buscarCat(c.categoria)), c.nombre, c.categoria + ' · ' + describirRepeticion(c), h.join(''));
   $('pEliminar').title = 'Eliminar la fila y sus montos';
   if (fijo) {
     textoHabil();
@@ -96,9 +121,19 @@ function abrirPanel(c) {
     $('pUlt').onchange = function () { if ($('pUlt').checked) $('pAnt').checked = false; $('pDia').disabled = $('pUlt').checked || $('pAnt').checked; cambio(); };
     $('pAnt').onchange = function () { if ($('pAnt').checked) $('pUlt').checked = false; $('pDia').disabled = $('pUlt').checked || $('pAnt').checked; cambio(); };
     $('pHabil').onchange = cambio;
-    $('pProy').onchange = function () { $('pProyInfo').textContent = AYUDA_PROY[$('pProy').value] || ''; };
+    $('pRep').querySelectorAll('[data-rep]').forEach(function (b) { b.onclick = function () { PANEL.rep = b.dataset.rep; actualizarRepeticion(); }; });
+    $('pMesesSel').querySelectorAll('[data-mes]').forEach(function (b) {
+      b.onclick = function () {
+        var n = Number(b.dataset.mes), i = PANEL.meses.indexOf(n);
+        if (i >= 0) PANEL.meses.splice(i, 1); else PANEL.meses.push(n);
+        PANEL.meses.sort(function (x, y) { return x - y; });
+        actualizarRepeticion();
+      };
+    });
+    $('pAum').addEventListener('focus', function () { $('pCuerpo').querySelector('input[name=pProy][value=aumento]').checked = true; });
+    actualizarRepeticion();
     var mostrarFx = function (si) {
-      $('pFx').hidden = !si; $('pProyCampo').hidden = si;
+      $('pFx').hidden = !si; actualizarRepeticion();
       $('pFxBtn').classList.toggle('activo', si); $('pFxBtn').setAttribute('aria-pressed', String(si));
     };
     $('pFxBtn').onclick = function () {
@@ -112,6 +147,18 @@ function abrirPanel(c) {
   }
   $('pNombre').focus();
   $('pNombre').select();
+}
+
+/** Muestra los meses (si es "Algunos meses"), la ayuda y oculta "¿Con qué monto?" si no se repite o hay fórmula. */
+function actualizarRepeticion() {
+  $('pRep').querySelectorAll('[data-rep]').forEach(function (b) { b.setAttribute('aria-pressed', String(b.dataset.rep === PANEL.rep)); });
+  $('pMesesSel').hidden = PANEL.rep !== 'algunos';
+  $('pMesesSel').querySelectorAll('[data-mes]').forEach(function (b) { b.setAttribute('aria-pressed', String(PANEL.meses.indexOf(Number(b.dataset.mes)) >= 0)); });
+  var info = AYUDA_REP[PANEL.rep];
+  if (PANEL.rep === 'algunos' && PANEL.meses.length) info = 'Se completa solo en ' + mesesCortos(PANEL.meses.join(',')) + ', con el último monto que cargaste.';
+  if (PANEL.rep === 'algunos' && !PANEL.meses.length) info = 'Marcá los meses en que se repite.';
+  $('pRepInfo').textContent = info;
+  $('pMontoCampo').hidden = PANEL.rep === 'no' || !$('pFx').hidden;
 }
 
 /** Número de la fórmula (acepta 20 · 12,5 · 1.000.000 · 1M · 150k). */
@@ -172,8 +219,8 @@ function mostrarFechasVence(r) {
   var el = $('pVenceInfo');
   el.classList.toggle('error', !!r.error);
   if (r.error) { el.textContent = r.error; return; }
-  if (!r.fechas.length) { el.textContent = 'Sin vencimiento: elegí un día o marcá último / anteúltimo.'; return; }
-  el.innerHTML = 'Se paga: ' + r.fechas.map(function (f) {
+  if (!r.fechas.length) { el.textContent = 'Sin fecha: elegí un día o marcá último / anteúltimo.'; return; }
+  el.innerHTML = esc(txtClase(PANEL.c.clase).Verbo) + ': ' + r.fechas.map(function (f) {
     return '<b>' + esc(MESES_P[Number(f.slice(5, 7)) - 1].slice(0, 3)) + ' (' + Number(f.slice(8)) + ')</b>';
   }).join(' · ');
 }
@@ -188,7 +235,19 @@ function guardarConceptoPanel() {
   if ($('pCat').value !== c.categoria) campos.categoria = $('pCat').value;
   if (c.tipo === 'fijo') { var regla = reglaElegida(); if (regla !== (c.vence || '')) campos.vence = regla; }
   if ($('pMedio').value.trim() !== (c.medio || '')) campos.medio = $('pMedio').value.trim();
-  if (c.tipo === 'fijo' && $('pProy').value !== c.proyeccion) campos.proyeccion = $('pProy').value;
+  if (c.tipo === 'fijo') {
+    if (PANEL.rep === 'algunos' && !PANEL.meses.length) { aviso('Marcá al menos un mes', true); return; }
+    var meses = PANEL.rep === 'no' ? 'no' : PANEL.rep === 'algunos' ? PANEL.meses.join(',') : '';
+    if (meses !== (c.meses || '')) campos.meses = meses;
+    var elegido = $('pCuerpo').querySelector('input[name=pProy]:checked');
+    var proy = elegido ? elegido.value : c.proyeccion;
+    if (proy === 'aumento') {
+      var a = montoP($('pAum').value);
+      if (!a || !(a.valor > 0) || a.valor > 100) { aviso('Poné el aumento mensual en %, ej. 5', true); $('pAum').focus(); return; }
+      proy = 'Aumento ' + a.valor + '%';
+    }
+    if (PANEL.rep !== 'no' && $('pFx').hidden && proy !== c.proyeccion) campos.proyeccion = proy;
+  }
   if (c.tipo === 'fijo') {
     var n = numeroFx();
     if (!$('pFx').hidden && $('pNum').value.trim() !== '' && !(n > 0)) { aviso('Poné un número mayor a 0', true); $('pNum').focus(); return; }

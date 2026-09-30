@@ -43,10 +43,32 @@ function normConcepto_(c, categorias) {
     id: String(c.id), nombre: String(c.nombre || ''), categoria: cat ? cat.nombre : String(c.categoria || ''),
     clase: cat ? cat.clase : (/^[IGA]$/.test(String(c.clase)) ? String(c.clase) : 'G'),
     tipo: tipo, vence: tipo === 'fijo' ? String(c.vence == null ? '' : c.vence) : '', medio: String(c.medio || ''),
-    proyeccion: tipo === 'eventual' ? 'No proyectar' : (FZ.PROY.indexOf(String(c.proyeccion)) >= 0 ? String(c.proyeccion) : 'Repetir'),
+    // "No proyectar" (versiones anteriores) = no se repite
+    meses: tipo === 'eventual' ? 'no' : String(c.proyeccion) === 'No proyectar' && !String(c.meses || '') ? 'no' : normMeses_(c.meses),
+    proyeccion: tipo === 'eventual' ? 'Repetir' : normProyeccion_(c.proyeccion),
     formula: tipo === 'fijo' && parsearFormula_(c.formula) ? formulaTexto_(parsearFormula_(c.formula)) : '',
     orden: Number(c.orden) || 0
   };
+}
+
+/** Cuándo se repite: '' (todos los meses), 'no' o meses específicos "6,12". */
+function normMeses_(v) {
+  var s = String(v == null ? '' : v).trim().toLowerCase();
+  if (!s || s === 'todos') return '';
+  if (s === 'no') return 'no';
+  var lista = [];
+  s.split(/[^\d]+/).forEach(function (x) { var n = Number(x); if (n >= 1 && n <= 12 && lista.indexOf(n) < 0) lista.push(n); });
+  lista.sort(function (a, b) { return a - b; });
+  return lista.length === 12 || !lista.length ? '' : lista.join(',');
+}
+
+/** Con qué monto: Repetir · Promedio 3 meses · Ajustar por inflación · "Aumento 5%". */
+function normProyeccion_(v) {
+  var s = String(v || '');
+  if (s === 'Promedio 3 meses' || s === 'Ajustar por inflación') return s;
+  var a = aumentoMensual_(s);
+  if (a !== null && a > 0 && a <= 1) return 'Aumento ' + String(Math.round(a * 10000) / 100) + '%';
+  return 'Repetir';
 }
 
 /**
@@ -90,11 +112,12 @@ function aplicarFormula_(modelo, c, meses, idxHoy, idxFin) {
     return v ? v.monto : null;
   };
   var cambios = 0;
+  var soloMeses = c.meses === 'no' ? [] : c.meses ? c.meses.split(',').map(Number) : null;
   meses.forEach(function (mes, i) {
     if (i < idxHoy) return;
     var x = porMes[mes];
     if (x && x.estado === 'confirmado') return;
-    var b = i <= idxFin ? base(mes) : null;
+    var b = i <= idxFin && (!soloMeses || soloMeses.indexOf(Number(mes.slice(5))) >= 0) ? base(mes) : null;
     if (b === null) { if (x) { delete porMes[mes]; cambios++; } return; }
     var monto = f.op === '%' ? b * f.n / 100 : f.op === '+' ? b + f.n : Math.max(0, b - f.n);
     monto = Math.round(monto * 100) / 100;
@@ -165,11 +188,14 @@ function reproyectar_(modelo, ids, opts) {
   var confirmar = {};
   (opts.confirmar || []).forEach(function (x) { confirmar[x.concepto + '@' + x.mes] = true; });
   var infl = null, total = 0;
+  var numMes = meses.map(function (m) { return Number(m.slice(5)); });
   modelo.conceptos.forEach(function (c) {
     // Los conceptos con fórmula dependen de otros: se calculan todos al final
     if ((ids && ids.indexOf(c.id) < 0 && !c.formula)) return;
     var porMes = modelo.valores[c.id] = modelo.valores[c.id] || {};
-    if (c.tipo !== 'fijo' || c.formula) {
+    if (c.tipo !== 'fijo' || c.formula || c.meses === 'no') {
+      // Sin repetición: se limpian los estimados de meses futuros
+      if (c.tipo === 'fijo' && c.meses === 'no' && !c.formula) Object.keys(porMes).forEach(function (m) { if (m >= hoy && porMes[m].estado === 'estimado') { delete porMes[m]; total++; } });
       Object.keys(porMes).forEach(function (m) {
         if (porMes[m].estado === 'estimado' && ((opts.confirmarAntesDe && m < opts.confirmarAntesDe) || confirmar[c.id + '@' + m])) { porMes[m].estado = 'confirmado'; total++; }
       });
@@ -184,7 +210,8 @@ function reproyectar_(modelo, ids, opts) {
       return { v: x.monto, f: x.cuenta ? '=' + x.cuenta : '', proy: x.estado === 'estimado' };
     });
     if (c.proyeccion === 'Ajustar por inflación' && infl === null) infl = inflacionEsperada_();
-    calcularProyeccion(celdas, idxHoy, idxFin, c.proyeccion, infl || 0).forEach(function (ch) {
+    var opcMeses = c.meses ? { meses: c.meses.split(',').map(Number), numMes: numMes } : null;
+    calcularProyeccion(celdas, idxHoy, idxFin, c.proyeccion, infl || 0, opcMeses).forEach(function (ch) {
       var mes = meses[ch.i];
       if (ch.borrar) delete porMes[mes];
       else {
@@ -263,7 +290,7 @@ function completarIngresos_(m) {
       deIng.filter(function (x) { return parecidos[nombre] && parecidos[nombre].test(norm_(x.nombre)) && FZ.INGRESOS.indexOf(x.nombre) < 0; })[0];
     if (c) c.nombre = nombre;
     else {
-      c = normConcepto_({ id: nuevoId_(), nombre: nombre, categoria: cat.nombre, proyeccion: nombre === 'Salario' ? 'Repetir' : 'No proyectar' }, m.categorias);
+      c = normConcepto_({ id: nuevoId_(), nombre: nombre, categoria: cat.nombre, meses: nombre === 'Salario' ? '' : 'no' }, m.categorias);
       m.conceptos.push(c);
     }
     c.orden = -1000 + i;
