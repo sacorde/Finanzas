@@ -83,6 +83,18 @@ test('junto al nombre: día de pago del mes y medio de pago abreviado', () => {
   assert.strictEqual(P.diaDePago(venc, 'b', '2026-02'), null);
 });
 
+test('fórmula de porcentaje (ƒx): cliente igual que servidor', () => {
+  for (const t of ['Ingresos*20%', '=ingresos * 12,5 %', '#abc123*10%', 'Ingresos*0%', 'otra cosa', '']) {
+    const a = P.parsearFormulaP(t), b = G.parsearFormula_(t);
+    assert.deepStrictEqual(a && { ...a }, b && { ...b }, t);
+  }
+  assert.strictEqual(P.textoFormula('I', 20), 'Ingresos*20%');
+  assert.strictEqual(P.textoFormula('abc', 12.5), '#abc*12.5%');
+  assert.strictEqual(P.describirFormula('Ingresos*20%', []), '20% de Ingresos');
+  assert.strictEqual(P.describirFormula('#abc*12.5%', [{ id: 'abc', nombre: 'Salario' }]), '12,5% de Salario');
+  assert.strictEqual(P.resumenConcepto({ tipo: 'fijo', proyeccion: 'Repetir', formula: 'Ingresos*20%' }), 'ƒx 20%');
+});
+
 test('selector de vencimiento: día 1–28, último / anteúltimo, hábil', () => {
   const r = (dia, fin, habil) => P.reglaDesdeSelector({ dia, fin, habil });
   assert.strictEqual(r(15, '', false), '15');

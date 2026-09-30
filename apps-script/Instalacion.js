@@ -135,7 +135,17 @@ function api_borrarHojas(nombres) {
  * @return {boolean} true si actualizó algo
  */
 function actualizarEsquema_() {
-  if (!dbInstalada_() || cabecera_(hojaTabla_(FZ.T.CONCEPTOS)).indexOf('seccion') < 0) return false;
+  if (!dbInstalada_()) return false;
+  var cab = cabecera_(hojaTabla_(FZ.T.CONCEPTOS));
+  if (cab.indexOf('seccion') < 0 && cab.join('|') !== ESQUEMA.Conceptos.cols.join('|')) {
+    // Columnas nuevas (ej. "formula"): se reescribe la tabla con el encabezado actual
+    return conLock_(function () {
+      if (cabecera_(hojaTabla_(FZ.T.CONCEPTOS)).join('|') === ESQUEMA.Conceptos.cols.join('|')) return false;
+      escribirTabla(FZ.T.CONCEPTOS, cargarModelo_().conceptos);
+      return true;
+    });
+  }
+  if (cab.indexOf('seccion') < 0) return false;
   return conLock_(function () {
     if (cabecera_(hojaTabla_(FZ.T.CONCEPTOS)).indexOf('seccion') < 0) return false;
     var ss = ss_();

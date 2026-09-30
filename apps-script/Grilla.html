@@ -136,8 +136,9 @@ function dibujarGrilla() {
     if (f.t === 'cat') {
       // Desplegada es solo un divisor; plegada muestra la suma de sus filas
       var cerrada = f.cerrada;
-      h.push('<tr class="cat' + (cerrada ? ' cerrado' : '') + '" data-key="' + esc(f.key) + '" style="--cat:' + catColor(f.cat) + '">' + gr + '<td class="n" data-f="' + r + '" data-k="0" title="' + (cerrada ? 'Plegada: muestra la suma de sus filas' : 'Clic en ▾ para plegar y ver la suma') + '"><span class="caret" title="' + (cerrada ? 'Mostrar' : 'Ocultar') + ' filas">▾</span><i class="punto"></i><span class="tn">' + esc(f.cat.nombre) + '</span>' +
+      h.push('<tr class="cat' + (cerrada ? ' cerrado' : '') + '" data-key="' + esc(f.key) + '" style="--cat:' + catColor(f.cat) + '">' + gr + '<td class="n" data-f="' + r + '" data-k="0" title="' + (cerrada ? 'Plegada: muestra la suma de sus filas' : 'Clic en ▾ para plegar y ver la suma') + '">' +
         '<button class="lapiz" data-editar-cat="1" title="Editar la categoría ' + esc(f.cat.nombre) + '" aria-label="Editar la categoría ' + esc(f.cat.nombre) + '">✎</button>' +
+        '<span class="caret" title="' + (cerrada ? 'Mostrar' : 'Ocultar') + ' filas">▾</span><i class="punto"></i><span class="tn">' + esc(f.cat.nombre) + '</span>' +
         '<button class="mas" data-mas="fila" title="Agregar una fila en ' + esc(f.cat.nombre) + '">+</button><span class="cuenta-filas">' + f.conceptos.length + '</span></td>');
       celdas();
       h.push('</tr>');
@@ -151,7 +152,7 @@ function dibujarGrilla() {
       h.push('</tr>');
     } else {
       var c0 = f.c, meta = resumenConcepto(c0), dia = diaDePago(S.venc, c0.id, foco);
-      var titulo = c0.nombre + (dia ? ' · se paga el ' + dia + ' de ' + etiquetaMesP(foco).toLowerCase() : '') + (c0.medio ? ' · ' + c0.medio : '');
+      var titulo = c0.nombre + (dia ? ' · se paga el ' + dia + ' de ' + etiquetaMesP(foco).toLowerCase() : '') + (c0.medio ? ' · ' + c0.medio : '') + (c0.formula ? ' · ƒx ' + describirFormula(c0.formula, S.conceptos) : '');
       h.push('<tr class="item' + (c0.tipo === 'eventual' ? ' ev' : '') + '" style="--cat:' + catColor(f.cat) + '">' + gr + '<td class="n" data-f="' + r + '" data-k="0" title="' + esc(titulo) + '">' +
         '<button class="lapiz" data-editar="1" title="Editar ' + esc(c0.nombre) + '" aria-label="Editar ' + esc(c0.nombre) + '">✎</button>' +
         (meta ? '<span class="meta">' + esc(meta) + '</span>' : '') +
@@ -239,8 +240,8 @@ function pintarSeleccion() {
   if (f0 && f0.t === 'item' && c0) {
     partes.push(esc(f0.c.nombre) + (c0.t === 'mes' ? ' · ' + esc(etiquetaMesP(c0.mes)) : c0.t === 'tot' ? ' · Total ' + c0.anio : ''));
     var v0 = c0.t === 'mes' ? celdaDe(f0.c, c0.mes) : null;
-    if (v0) partes.push((v0.e ? 'estimado' : 'cargado') + (v0.c ? ' · =' + esc(v0.c) : ''));
-    if (c0.t === 'nombre') partes.push(esc(f0.c.categoria) + (f0.c.tipo === 'fijo' ? ' · vence: ' + esc(f0.c.vence || '—') + ' · meses futuros: ' + esc(f0.c.proyeccion) : ' · gasto eventual') + (f0.c.medio ? ' · ' + esc(f0.c.medio) : '') + ' · <b>✎</b> o F4 para editar');
+    if (v0) partes.push((v0.e ? (f0.c.formula ? 'calculado: ' + esc(describirFormula(f0.c.formula, S.conceptos)) : 'estimado') : 'cargado') + (v0.c ? ' · =' + esc(v0.c) : ''));
+    if (c0.t === 'nombre') partes.push(esc(f0.c.categoria) + (f0.c.tipo === 'fijo' ? ' · vence: ' + esc(f0.c.vence || '—') + (f0.c.formula ? ' · ƒx ' + esc(describirFormula(f0.c.formula, S.conceptos)) : ' · meses futuros: ' + esc(f0.c.proyeccion)) : ' · gasto eventual') + (f0.c.medio ? ' · ' + esc(f0.c.medio) : '') + ' · <b>✎</b> o F4 para editar');
   }
   var txt = partes.join(' — ');
   if (n > 1) txt += (txt ? ' · ' : '') + 'Suma <b>$ ' + fmtN(suma) + '</b> · Promedio <b>$ ' + fmtN(suma / n) + '</b> · ' + n + ' celdas';

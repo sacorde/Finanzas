@@ -208,6 +208,57 @@ test('carga rápida de un gasto eventual en cuotas crea una fila', () => {
   G.api_borrarConcepto(r2.id);
 });
 
+test('ahorro como porcentaje de los ingresos (fórmula)', () => {
+  const ah = concepto('Ahorro del Mes'), sal = concepto('Salario');
+  const ing = (d, mes) => d.conceptos.filter((c) => c.clase === 'I').reduce((t, c) => { const v = valor(d, c.id, mes); return t + (v ? v[2] : 0); }, 0);
+  let r = plano(G.api_guardarConcepto({ id: ah.id, formula: 'Ingresos*20%' }));
+  assert.strictEqual(r.conceptos.find((c) => c.id === ah.id).formula, 'Ingresos*20%');
+  let d = G.api_datos();
+  for (const mes of ['2026-10', '2026-12', '2027-03']) {
+    const v = valor(d, ah.id, mes);
+    assert.ok(v, mes);
+    assert.strictEqual(v[2], Math.round(ing(d, mes) * 20) / 100, mes + ': 20% de los ingresos');
+  }
+  const antes = plano(valor(d, ah.id, '2026-05'));
+  assert.strictEqual(valor(d, ah.id, '2026-10')[4], 1, 'los meses futuros pasan a calcularse (aunque estuvieran cargados)');
+  // Cambia el salario → el ahorro se recalcula solo (y viaja en la respuesta)
+  const rc = plano(G.api_guardarCeldas([{ c: sal.id, mes: '2026-11', texto: '2000000' }]));
+  assert.ok(rc.valores[ah.id], 'la respuesta trae el concepto con fórmula');
+  d = G.api_datos();
+  assert.strictEqual(valor(d, ah.id, '2026-11')[2], Math.round(ing(d, '2026-11') * 20) / 100);
+  assert.deepStrictEqual(plano(valor(d, ah.id, '2026-05')), antes, 'los meses pasados no se tocan');
+  // Un monto escrito a mano en un mes se respeta
+  G.api_guardarCeldas([{ c: ah.id, mes: '2026-12', texto: '123' }]);
+  assert.deepStrictEqual(plano(valor(G.api_datos(), ah.id, '2026-12')).slice(2), [123, '', 0]);
+  // % de un concepto
+  G.api_guardarConcepto({ id: ah.id, formula: '#' + sal.id + '*10%' });
+  d = G.api_datos();
+  assert.strictEqual(valor(d, ah.id, '2027-01')[2], Math.round(valor(d, sal.id, '2027-01')[2] * 10) / 100);
+  assert.throws(() => G.api_guardarConcepto({ id: ah.id, formula: '#' + ah.id + '*10%' }), /otro concepto/);
+  assert.throws(() => G.api_guardarConcepto({ id: sal.id, formula: 'Ingresos*10%' }), /ingreso/);
+  assert.throws(() => G.api_guardarConcepto({ id: ah.id, formula: 'cualquier cosa' }), /fórmula/);
+  // Quitar la fórmula: vuelve a proyectarse como siempre
+  G.api_guardarCeldas([{ c: ah.id, mes: '2026-12', texto: '' }]);
+  r = plano(G.api_guardarConcepto({ id: ah.id, formula: '' }));
+  assert.strictEqual(r.conceptos.find((c) => c.id === ah.id).formula, '');
+  d = G.api_datos();
+  assert.strictEqual(valor(d, ah.id, '2027-01')[2], valor(d, ah.id, '2026-09')[2], 'repite el último cargado');
+  G.api_guardarCeldas([{ c: sal.id, mes: '2026-11', texto: '' }]);
+});
+
+test('una base de la versión 5 sin columna "formula" se actualiza sola', () => {
+  const G5 = cargar({ hoy: HOY });
+  const env5 = crearEntorno(G5);
+  const hoja = (nombre, filas) => { const sh = env5.ss.insertSheet(nombre); sh.getRange(1, 1, filas.length, filas[0].length).setValues(filas); };
+  hoja('Conceptos', [['id', 'nombre', 'categoria', 'clase', 'tipo', 'vence', 'medio', 'proyeccion', 'orden'], ['a1', 'Luz', 'Servicios', 'G', 'fijo', '1er hábil', '', 'Repetir', 10]]);
+  hoja('Categorias', [['nombre', 'clase', 'tipo', 'color', 'orden'], ['Servicios', 'G', 'fijo', '#B7791F', 10]]);
+  hoja('Valores', [['concepto', 'mes', 'monto', 'cuenta', 'estado'], ['a1', '2026-09', 100, '', 'confirmado']]);
+  const d = plano(G5.api_datos());
+  assert.strictEqual(d.conceptos[0].vence, '1er hábil');
+  assert.strictEqual(env5.ss.getSheetByName('Conceptos').getRange(1, 9).getValue(), 'formula');
+  assert.deepStrictEqual(plano(G5.api_hojasSobrantes()), []);
+});
+
 test('tarea diaria: calendario idempotente', () => {
   G.tareaDiaria();
   const n = env.eventos.filter((e) => !e._borrado).length;
@@ -331,9 +382,9 @@ test('actualiza sola una base de la versión 4 a categorías de un solo nivel', 
   assert.ok(valor(d, 'e1', '2026-03'));
   assert.ok(valor(d, 'g1', '2026-10'), 'sigue proyectando');
   assert.deepStrictEqual(d.categorias.map((c) => c.nombre).length, 9);
-  assert.deepStrictEqual(env4.ss.getSheetByName('Conceptos').getRange(1, 1, 1, 9).getValues()[0], ['id', 'nombre', 'categoria', 'clase', 'tipo', 'vence', 'medio', 'proyeccion', 'orden']);
+  assert.deepStrictEqual(env4.ss.getSheetByName('Conceptos').getRange(1, 1, 1, 10).getValues()[0], ['id', 'nombre', 'categoria', 'clase', 'tipo', 'vence', 'medio', 'proyeccion', 'formula', 'orden']);
   assert.deepStrictEqual(env4.ss.getSheetByName('Categorias').getRange(1, 1, 1, 5).getValues()[0], ['nombre', 'clase', 'tipo', 'color', 'orden']);
-  assert.strictEqual(env4.ss.getSheetByName('Conceptos').getLastColumn(), 9);
+  assert.strictEqual(env4.ss.getSheetByName('Conceptos').getLastColumn(), 10);
   assert.deepStrictEqual(plano(G4.api_hojasSobrantes()), [], 'las tablas actualizadas no se ofrecen para borrar');
   assert.strictEqual(plano(G4.api_datos()).conceptos.length, d.conceptos.length, 'no se repite');
 });

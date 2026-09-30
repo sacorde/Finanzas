@@ -38,8 +38,24 @@ function abrirPanel(c) {
   var h = [];
   h.push('<label class="campo-p">Nombre<input id="pNombre" autocomplete="off" value="' + esc(c.nombre) + '"></label>');
   h.push('<label class="campo-p">Categoría<select id="pCat">' + cats.map(function (k) { return '<option' + (k.nombre === c.categoria ? ' selected' : '') + '>' + esc(k.nombre) + '</option>'; }).join('') + '</select></label>');
-  h.push('<label class="campo-p">Monto de ' + esc(etiquetaMesP(S.mesFoco).toLowerCase()) + '<input id="pMonto" class="num" autocomplete="off" inputmode="decimal" placeholder="Vacío" value="' + esc(montoPanel(v)) + '">' +
-    '<span class="ayuda-p">' + (v ? (v.e ? 'Estimado por el sistema: si lo cambiás queda confirmado.' : 'Cargado por vos.') : 'Acepta cuentas: 1500+300, 150k, 12000*3.') + '</span></label>');
+  var fx = fijo ? parsearFormulaP(c.formula) : null;
+  PANEL.fx = fx;
+  h.push('<div class="campo-p"><label for="pMonto">Monto de ' + esc(etiquetaMesP(S.mesFoco).toLowerCase()) + '</label>' +
+    '<div class="monto-fx"><input id="pMonto" class="num" autocomplete="off" inputmode="decimal" placeholder="Vacío" value="' + esc(montoPanel(v)) + '">' +
+    (fijo ? '<button type="button" class="boton-fx' + (fx ? ' activo' : '') + '" id="pFxBtn" title="Calcular como porcentaje de los ingresos o de otro concepto" aria-pressed="' + !!fx + '">ƒx</button>' : '') + '</div>' +
+    '<span class="ayuda-p">' + (v ? (v.e ? (fx ? 'Calculado por la fórmula' : 'Estimado por el sistema') + ': si lo cambiás queda confirmado.' : 'Cargado por vos.') : 'Acepta cuentas: 1500+300, 150k, 12000*3.') + '</span>');
+  if (fijo) {
+    var bases = S.conceptos.filter(function (x) { return x.tipo === 'fijo' && !x.formula && x.id !== c.id; })
+      .sort(function (a, b) { return grupoIdx(a.clase) - grupoIdx(b.clase) || a.orden - b.orden; });
+    var baseSel = fx ? fx.base : (c.clase === 'I' ? (bases[0] && bases[0].id) : 'I');
+    h.push('<div class="fx-caja" id="pFx"' + (fx ? '' : ' hidden') + '>' +
+      '<div class="fx-linea"><span class="fx-ico">ƒx</span><input id="pPct" type="number" min="0" max="1000" step="0.5" inputmode="decimal" placeholder="20" value="' + (fx ? fx.pct : '') + '"><span>% de</span>' +
+      '<select id="pBase">' + (c.clase !== 'I' ? '<option value="I"' + (baseSel === 'I' ? ' selected' : '') + '>Total de ingresos</option>' : '') +
+      '<optgroup label="Un concepto">' + bases.map(function (x) { return '<option value="' + esc(x.id) + '"' + (x.id === baseSel ? ' selected' : '') + '>' + esc(x.nombre) + ' · ' + esc(x.categoria) + '</option>'; }).join('') + '</optgroup></select></div>' +
+      '<span class="ayuda-p">Desde el mes actual, cada mes se calcula solo con este porcentaje. Si escribís un monto en una celda, ese mes queda con tu valor.</span>' +
+      '<button type="button" class="mini" id="pFxQuitar">Quitar fórmula</button></div>');
+  }
+  h.push('</div>');
   if (fijo) {
     var sel = selectorDesdeRegla(c.vence);
     h.push('<div class="campo-p">Vence' +
@@ -56,7 +72,7 @@ function abrirPanel(c) {
     '<span class="ayuda-p">Se muestra junto al nombre: Débito automático (DA), Transferencia (T), Efectivo (EF), Mercado Pago (MP), tarjetas (VISA, AMEX…).' +
     (fijo ? ' Con débito automático, el monto se confirma solo el día del vencimiento.' : '') + '</span></label>');
   if (fijo) {
-    h.push('<label class="campo-p">Meses futuros<select id="pProy">' + S.proyecciones.map(function (x) { return '<option' + (x === c.proyeccion ? ' selected' : '') + '>' + esc(x) + '</option>'; }).join('') + '</select>' +
+    h.push('<label class="campo-p" id="pProyCampo"' + (fx ? ' hidden' : '') + '>Meses futuros<select id="pProy">' + S.proyecciones.map(function (x) { return '<option' + (x === c.proyeccion ? ' selected' : '') + '>' + esc(x) + '</option>'; }).join('') + '</select>' +
       '<span class="ayuda-p" id="pProyInfo">' + esc(AYUDA_PROY[c.proyeccion] || '') + '</span></label>');
   }
   mostrarPanel(catColor(buscarCat(c.categoria)), c.nombre, c.categoria + ' · ' + (fijo ? 'se repite todos los meses' : 'gasto eventual'), h.join(''));
@@ -75,6 +91,16 @@ function abrirPanel(c) {
     $('pAnt').onchange = function () { if ($('pAnt').checked) $('pUlt').checked = false; $('pDia').disabled = $('pUlt').checked || $('pAnt').checked; cambio(); };
     $('pHabil').onchange = cambio;
     $('pProy').onchange = function () { $('pProyInfo').textContent = AYUDA_PROY[$('pProy').value] || ''; };
+    var mostrarFx = function (si) {
+      $('pFx').hidden = !si; $('pProyCampo').hidden = si;
+      $('pFxBtn').classList.toggle('activo', si); $('pFxBtn').setAttribute('aria-pressed', String(si));
+    };
+    $('pFxBtn').onclick = function () {
+      var abrir = $('pFx').hidden;
+      mostrarFx(abrir);
+      if (abrir) { if (!$('pPct').value) $('pPct').value = 20; $('pPct').focus(); $('pPct').select(); }
+    };
+    $('pFxQuitar').onclick = function () { $('pPct').value = ''; mostrarFx(false); };
   }
   $('pNombre').focus();
   $('pNombre').select();
@@ -131,6 +157,12 @@ function guardarConceptoPanel() {
   if (c.tipo === 'fijo') { var regla = reglaElegida(); if (regla !== (c.vence || '')) campos.vence = regla; }
   if ($('pMedio').value.trim() !== (c.medio || '')) campos.medio = $('pMedio').value.trim();
   if (c.tipo === 'fijo' && $('pProy').value !== c.proyeccion) campos.proyeccion = $('pProy').value;
+  if (c.tipo === 'fijo') {
+    var pct = Number(String($('pPct').value).replace(',', '.'));
+    if (!$('pFx').hidden && $('pPct').value !== '' && !(pct > 0)) { aviso('Poné un porcentaje mayor a 0', true); $('pPct').focus(); return; }
+    var formula = !$('pFx').hidden && pct > 0 ? textoFormula($('pBase').value, pct) : '';
+    if (formula !== (c.formula || '')) campos.formula = formula;
+  }
   var monto = $('pMonto').value.trim(), v = celdaDe(c, S.mesFoco);
   if (monto && !montoP(monto)) { aviso('No entendí el monto "' + monto + '"', true); $('pMonto').focus(); return; }
   var cambiaMonto = monto !== montoPanel(v) || (v && v.e && monto);

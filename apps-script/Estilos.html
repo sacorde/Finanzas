@@ -77,7 +77,7 @@
   .leyenda-celdas b { color: var(--ink); font-weight: 600; }
   .leyenda-celdas em { color: var(--muted); }
 
-  .grilla-wrap { flex: 1; min-height: 0; margin: 0 16px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); overflow: hidden; display: flex; flex-direction: column; box-shadow: var(--shadow); }
+  .grilla-wrap { flex: 1; min-height: 0; margin: 0 16px; border: 1px solid var(--line); border-radius: 0; background: var(--surface); overflow: hidden; display: flex; flex-direction: column; box-shadow: var(--shadow); }
   .grilla { flex: 1; overflow: auto; position: relative; outline: none; }
   table.g { border-collapse: separate; border-spacing: 0; font-size: 13px; --gr: 28px; }
   /* Columna de grupo (Balance · Ingresos · Gastos · Ahorro e inversión): solo informativa */
@@ -94,7 +94,9 @@
   table.g .gr-I { --g-bg: var(--sec-I-bg); --g-ink: var(--sec-I); box-shadow: inset 3px 0 0 var(--sec-I); }
   table.g .gr-G { --g-bg: var(--sec-G-bg); --g-ink: var(--sec-G); box-shadow: inset 3px 0 0 var(--sec-G); }
   table.g .gr-A { --g-bg: var(--sec-A-bg); --g-ink: var(--sec-A); box-shadow: inset 3px 0 0 var(--sec-A); }
-  table.g tr.sep-grupo td { height: 10px; padding: 0; border: 0; background: var(--page); }
+  /* Separación entre bloques (Balance · Ingresos · Gastos · Ahorro), cada uno enmarcado con bordes rectos */
+  table.g tr.sep-grupo td { height: 10px; padding: 0; border: 0; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); background: var(--page); }
+  table.g thead tr.res4 > * { border-bottom: 1px solid var(--line) !important; }
   table.g tr.resultado > * { font-size: 13.5px; }
   table.g tr.resultado td.m, table.g tr.resultado td.t { font-weight: 800; }
   table.g th, table.g td { height: var(--row); padding: 0 10px; white-space: nowrap; border-bottom: 1px solid var(--grid); border-right: 1px solid var(--grid); background: var(--surface); }
@@ -172,7 +174,9 @@
   .panel-tit { flex: 1; min-width: 0; }
   .panel-tit h2 { margin: 0; font-size: 17px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .panel-tit span { font-size: 12px; color: var(--muted); }
-  .panel-cuerpo { flex: 1; min-height: 0; overflow: auto; padding: 16px; display: grid; gap: 16px; align-content: start; }
+  .panel-cuerpo > *, .campo-p > *, .fx-caja > * { min-width: 0; }
+  .campo-p select { width: 100%; }
+  .panel-cuerpo { flex: 1; min-height: 0; overflow-x: hidden; overflow-y: auto; padding: 16px; display: grid; gap: 16px; align-content: start; }
   .campo-p { display: grid; gap: 6px; font-size: 11px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }
   .campo-p input, .campo-p select { font: inherit; font-size: 14px; font-weight: 500; text-transform: none; letter-spacing: 0; color: var(--ink); background: var(--surface);
     border: 1px solid var(--line); border-radius: 9px; padding: 9px 11px; }
@@ -182,8 +186,8 @@
   .ayuda-p b { color: var(--ink); font-weight: 600; }
   .ayuda-p.error { color: var(--critical-ink); }
   table.g tr.item .n .dia.medio { margin-left: 3px; }
-  table.g tr.cat .lapiz { width: 22px; height: 22px; margin-left: 6px; border: 1px solid transparent; border-radius: 6px; background: transparent; color: var(--cat);
-    font-size: 13px; line-height: 1; padding: 0; opacity: .45; vertical-align: middle; cursor: pointer; }
+  table.g tr.cat .lapiz { float: right; width: 22px; height: 22px; margin: 5px 0 0 4px; border: 1px solid transparent; border-radius: 6px; background: transparent; color: var(--cat);
+    font-size: 13px; line-height: 1; padding: 0; opacity: .45; cursor: pointer; }
   table.g tr.cat:hover .lapiz, table.g td.n.cur .lapiz, table.g tr.cat .lapiz:focus-visible { opacity: 1; border-color: color-mix(in srgb, var(--cat) 40%, transparent); }
   table.g tr.cat .lapiz:hover { background: var(--cat); color: #fff; }
   .vence-sel { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; }
@@ -204,6 +208,18 @@
   .seg-p { display: inline-flex; background: var(--surface3); border-radius: 10px; padding: 3px; gap: 2px; width: max-content; }
   .seg-p button { border: 0; background: transparent; padding: 7px 14px; border-radius: 8px; font-size: 13px; font-weight: 600; color: var(--ink2); text-transform: none; letter-spacing: 0; }
   .seg-p button[aria-pressed="true"] { background: var(--surface); color: var(--ink); box-shadow: var(--shadow); }
+  .monto-fx { display: flex; gap: 6px; }
+  .monto-fx input { flex: 1; min-width: 0; }
+  .boton-fx { flex: none; width: 42px; border: 1px solid var(--line); border-radius: 9px; background: var(--surface); color: var(--ink2); font: italic 700 15px Georgia, serif; cursor: pointer; }
+  .boton-fx:hover { border-color: var(--accent); color: var(--accent-ink); }
+  .boton-fx.activo { background: var(--accent-soft); border-color: var(--accent); color: var(--accent-ink); }
+  .fx-caja { display: grid; gap: 8px; padding: 10px 12px; border: 1px dashed var(--accent); border-radius: 10px; background: color-mix(in srgb, var(--accent) 5%, var(--surface)); text-transform: none; letter-spacing: 0; }
+  .fx-caja[hidden] { display: none !important; }
+  .fx-linea { display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 600; color: var(--ink); }
+  .fx-ico { font: italic 700 15px Georgia, serif; color: var(--accent-ink); }
+  .campo-p .fx-linea input { width: 72px; text-align: right; padding: 7px 9px; }
+  .campo-p .fx-linea select { flex: 1; min-width: 0; padding: 7px 9px; }
+  .fx-caja .mini { justify-self: start; }
   .panel-pie { display: flex; gap: 8px; align-items: center; padding: 12px 16px calc(12px + env(safe-area-inset-bottom)); border-top: 1px solid var(--line); background: var(--surface2); }
   @media (min-width: 1100px) { body.con-panel .grilla-wrap { margin-right: 396px; } }
   table.g td.est { color: var(--muted); font-style: italic; }

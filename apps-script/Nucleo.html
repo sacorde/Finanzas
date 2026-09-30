@@ -211,9 +211,28 @@ function abrevMedio(medio) {
   return ABREV_MEDIO[normP(m)] || m.replace(/^tarjeta\s+/i, '');
 }
 
-/** Indicación de cómo se completan los meses futuros (solo si no es "Repetir"). */
+/** Fórmula de porcentaje (igual que el servidor): "Ingresos*20%" o "#<id>*20%" → {base:'I'|id, pct}. */
+function parsearFormulaP(texto) {
+  var m = /^=?\s*(ingresos|#[\w-]+)\s*\*\s*(\d+(?:[.,]\d+)?)\s*%\s*$/i.exec(String(texto || ''));
+  if (!m) return null;
+  var pct = Number(m[2].replace(',', '.'));
+  if (!(pct > 0) || pct > 1000) return null;
+  return { base: m[1].charAt(0) === '#' ? m[1].slice(1) : 'I', pct: pct };
+}
+function textoFormula(base, pct) { return (base === 'I' ? 'Ingresos' : '#' + base) + '*' + pct + '%'; }
+/** "20% de Ingresos" / "10% de Salario". */
+function describirFormula(texto, conceptos) {
+  var f = parsearFormulaP(texto);
+  if (!f) return '';
+  var ref = f.base === 'I' ? null : (conceptos || []).filter(function (x) { return x.id === f.base; })[0];
+  return String(f.pct).replace('.', ',') + '% de ' + (f.base === 'I' ? 'Ingresos' : ref ? ref.nombre : '(concepto borrado)');
+}
+
+/** Indicación de cómo se completan los meses futuros (fórmula ƒx o modo distinto de "Repetir"). */
 function resumenConcepto(c) {
   if (c.tipo !== 'fijo') return '';
+  var f = parsearFormulaP(c.formula);
+  if (f) return 'ƒx ' + String(f.pct).replace('.', ',') + '%';
   return c.proyeccion === 'Promedio 3 meses' ? 'prom.' : c.proyeccion === 'Ajustar por inflación' ? '+infl.' : '';
 }
 

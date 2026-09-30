@@ -90,6 +90,7 @@ function api_guardarCeldas(cambios) {
     });
     reproyectar_(m, tocados);
     guardarValores_(m);
+    idsConFormula_(m).forEach(function (id) { if (tocados.indexOf(id) < 0) tocados.push(id); });
     return { valores: valoresDe_(m, tocados) };
   });
 }
@@ -105,7 +106,7 @@ function api_guardarConcepto(c) {
     if (c.id && !existente) throw new Error('Ese concepto ya no existe. Recargá la página.');
     var base = existente || { id: nuevoId_(), categoria: c.categoria, orden: 1e9 };
     var datos = {};
-    ['id', 'nombre', 'categoria', 'vence', 'medio', 'proyeccion', 'orden'].forEach(function (k) { datos[k] = c.hasOwnProperty(k) && k !== 'id' && k !== 'orden' ? c[k] : base[k]; });
+    ['id', 'nombre', 'categoria', 'vence', 'medio', 'proyeccion', 'formula', 'orden'].forEach(function (k) { datos[k] = c.hasOwnProperty(k) && k !== 'id' && k !== 'orden' ? c[k] : base[k]; });
     datos.nombre = String(datos.nombre || '').trim();
     if (!datos.nombre) throw new Error('El concepto necesita un nombre.');
     var cat = buscarCategoria_(m.categorias, datos.categoria);
@@ -114,10 +115,30 @@ function api_guardarConcepto(c) {
     if (existente && cat.nombre !== existente.categoria) datos.orden = 1e9;
     var regla = parsearRegla(datos.vence);
     if (regla && regla.error) throw new Error(regla.error);
+    if (datos.formula) {
+      var f = parsearFormula_(datos.formula);
+      if (!f) throw new Error('No entendí la fórmula "' + datos.formula + '". Ejemplo: Ingresos*20%');
+      var ref = f.base === 'I' ? null : m.conceptos.filter(function (x) { return x.id === f.base; })[0];
+      if (f.base !== 'I' && (!ref || ref.id === base.id || ref.formula)) throw new Error('Elegí otro concepto como base del porcentaje.');
+      if (f.base === 'I' && cat.clase === 'I') throw new Error('Un ingreso no puede calcularse como porcentaje del total de ingresos.');
+    }
     var nuevo = normConcepto_(datos, m.categorias);
     if (existente) m.conceptos[m.conceptos.indexOf(existente)] = nuevo; else m.conceptos.push(nuevo);
     guardarConceptos_(m);
-    if (!existente || c.hasOwnProperty('proyeccion')) { reproyectar_(m, [nuevo.id]); guardarValores_(m); }
+    var recalcular = !existente || c.hasOwnProperty('proyeccion') || c.hasOwnProperty('formula');
+    if (recalcular) {
+      // Sin fórmula: los meses que calculaba vuelven a proyectarse como siempre
+      if (existente && existente.formula && !nuevo.formula) {
+        var pm = m.valores[nuevo.id] || {};
+        Object.keys(pm).forEach(function (mes) { if (pm[mes].estado === 'estimado') delete pm[mes]; });
+      }
+      // Fórmula nueva o distinta: gobierna los meses futuros (el actual y los pasados quedan como están)
+      if (nuevo.formula && (!existente || existente.formula !== nuevo.formula)) {
+        var pmf = m.valores[nuevo.id] || {}, mesHoy = isoMes_(new Date());
+        Object.keys(pmf).forEach(function (mes) { if (mes > mesHoy) delete pmf[mes]; });
+      }
+      reproyectar_(m, [nuevo.id]); guardarValores_(m);
+    }
     var r = estructura_(m, [nuevo.id]);
     r.id = nuevo.id;
     return r;

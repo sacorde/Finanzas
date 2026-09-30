@@ -44,8 +44,53 @@ function normConcepto_(c, categorias) {
     clase: cat ? cat.clase : (/^[IGA]$/.test(String(c.clase)) ? String(c.clase) : 'G'),
     tipo: tipo, vence: tipo === 'fijo' ? String(c.vence == null ? '' : c.vence) : '', medio: String(c.medio || ''),
     proyeccion: tipo === 'eventual' ? 'No proyectar' : (FZ.PROY.indexOf(String(c.proyeccion)) >= 0 ? String(c.proyeccion) : 'Repetir'),
+    formula: tipo === 'fijo' && parsearFormula_(c.formula) ? formulaTexto_(parsearFormula_(c.formula)) : '',
     orden: Number(c.orden) || 0
   };
+}
+
+/**
+ * Fórmula de un concepto calculado como porcentaje: "Ingresos*20%" o "#<id>*20%".
+ * @return {{base:string, pct:number}|null} base 'I' (total de ingresos) o el id de un concepto
+ */
+function parsearFormula_(texto) {
+  var m = /^=?\s*(ingresos|#[\w-]+)\s*\*\s*(\d+(?:[.,]\d+)?)\s*%\s*$/i.exec(String(texto || ''));
+  if (!m) return null;
+  var pct = Number(m[2].replace(',', '.'));
+  if (!(pct > 0) || pct > 1000) return null;
+  return { base: m[1].charAt(0) === '#' ? m[1].slice(1) : 'I', pct: pct };
+}
+
+function formulaTexto_(f) { return (f.base === 'I' ? 'Ingresos' : '#' + f.base) + '*' + f.pct + '%'; }
+
+/**
+ * Completa los meses de un concepto con fórmula (desde el mes actual hasta el horizonte):
+ * porcentaje del total de ingresos o de otro concepto. Lo que cargaste a mano en un mes se respeta.
+ */
+function aplicarFormula_(modelo, c, meses, idxHoy, idxFin) {
+  var f = parsearFormula_(c.formula);
+  var porMes = modelo.valores[c.id] = modelo.valores[c.id] || {};
+  var ingresos = modelo.conceptos.filter(function (x) { return x.clase === 'I' && !x.formula && x.id !== c.id; });
+  var base = function (mes) {
+    if (f.base === 'I') {
+      var s = null;
+      ingresos.forEach(function (x) { var v = modelo.valores[x.id] && modelo.valores[x.id][mes]; if (v) s = (s || 0) + v.monto; });
+      return s;
+    }
+    var v = modelo.valores[f.base] && modelo.valores[f.base][mes];
+    return v ? v.monto : null;
+  };
+  var cambios = 0;
+  meses.forEach(function (mes, i) {
+    if (i < idxHoy) return;
+    var x = porMes[mes];
+    if (x && x.estado === 'confirmado') return;
+    var b = i <= idxFin ? base(mes) : null;
+    if (b === null) { if (x) { delete porMes[mes]; cambios++; } return; }
+    var monto = Math.round(b * f.pct) / 100;
+    if (!x || x.monto !== monto || x.cuenta) { porMes[mes] = { monto: monto, cuenta: '', estado: 'estimado' }; cambios++; }
+  });
+  return cambios;
 }
 
 function cargarModelo_() {
@@ -111,10 +156,13 @@ function reproyectar_(modelo, ids, opts) {
   (opts.confirmar || []).forEach(function (x) { confirmar[x.concepto + '@' + x.mes] = true; });
   var infl = null, total = 0;
   modelo.conceptos.forEach(function (c) {
-    if (ids && ids.indexOf(c.id) < 0) return;
+    // Los conceptos con fórmula dependen de otros: se calculan todos al final
+    if ((ids && ids.indexOf(c.id) < 0 && !c.formula)) return;
     var porMes = modelo.valores[c.id] = modelo.valores[c.id] || {};
-    if (c.tipo !== 'fijo') {
-      Object.keys(porMes).forEach(function (m) { if (porMes[m].estado === 'estimado' && opts.confirmarAntesDe && m < opts.confirmarAntesDe) { porMes[m].estado = 'confirmado'; total++; } });
+    if (c.tipo !== 'fijo' || c.formula) {
+      Object.keys(porMes).forEach(function (m) {
+        if (porMes[m].estado === 'estimado' && ((opts.confirmarAntesDe && m < opts.confirmarAntesDe) || confirmar[c.id + '@' + m])) { porMes[m].estado = 'confirmado'; total++; }
+      });
       return;
     }
     var celdas = meses.map(function (m) {
@@ -137,8 +185,12 @@ function reproyectar_(modelo, ids, opts) {
       total++;
     });
   });
+  modelo.conceptos.forEach(function (c) { if (c.formula) total += aplicarFormula_(modelo, c, meses, idxHoy, idxFin); });
   return total;
 }
+
+/** Ids de los conceptos con fórmula (se recalculan cuando cambia cualquier otro). */
+function idsConFormula_(m) { return m.conceptos.filter(function (c) { return c.formula; }).map(function (c) { return c.id; }); }
 
 function guardarValores_(modelo) {
   escribirTabla(FZ.T.VALORES, aplanarValores_(modelo.valores, modelo.conceptos));

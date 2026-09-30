@@ -30,7 +30,8 @@ var FZ = {
 
 /** Columnas de cada tabla. `texto`: columnas que se guardan como texto plano (evita que Sheets las convierta en fechas o fórmulas). */
 var ESQUEMA = {
-  Conceptos: { cols: ['id', 'nombre', 'categoria', 'clase', 'tipo', 'vence', 'medio', 'proyeccion', 'orden'], texto: ['id', 'nombre', 'categoria', 'clase', 'tipo', 'vence', 'medio', 'proyeccion'] },
+  // formula: "Ingresos*20%" (20 % del total de ingresos) o "#<id>*20%" (20 % de otro concepto)
+  Conceptos: { cols: ['id', 'nombre', 'categoria', 'clase', 'tipo', 'vence', 'medio', 'proyeccion', 'formula', 'orden'], texto: ['id', 'nombre', 'categoria', 'clase', 'tipo', 'vence', 'medio', 'proyeccion', 'formula'] },
   Valores: { cols: ['concepto', 'mes', 'monto', 'cuenta', 'estado'], texto: ['concepto', 'mes', 'cuenta', 'estado'] },
   Categorias: { cols: ['nombre', 'clase', 'tipo', 'color', 'orden'], texto: ['nombre', 'clase', 'tipo', 'color'] },
   Indices: { cols: ['mes', 'inflacion', 'dolar_oficial', 'dolar_blue', 'origen'], texto: ['mes', 'origen'] },
