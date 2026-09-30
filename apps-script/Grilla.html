@@ -149,11 +149,12 @@ function dibujarGrilla() {
     } else {
       var c0 = f.c, meta = resumenConcepto(c0), dia = diaDePago(S.venc, c0.id, foco);
       var titulo = c0.nombre + (dia ? ' · ' + txtClase(c0.clase).verbo + ' el ' + dia + ' de ' + etiquetaMesP(foco).toLowerCase() : '') + ' · ' + describirRepeticion(c0) + (c0.medio ? ' · ' + c0.medio : '') + (c0.formula ? ' · ƒx ' + describirFormula(c0.formula, S.conceptos) : '');
-      h.push('<tr class="item' + (c0.tipo === 'eventual' ? ' ev' : '') + (S.verTodo && archivada(c0) ? ' archivada' : '') + '" style="--cat:' + catColor(f.cat) + '">' + gr + '<td class="n" data-f="' + r + '" data-k="0" title="' + esc(titulo) + '">' +
+      h.push('<tr class="item cl-' + c0.clase + (c0.tipo === 'eventual' ? ' ev' : '') + (S.verTodo && archivada(c0) ? ' archivada' : '') + '" style="--cat:' + catColor(f.cat) + '">' + gr + '<td class="n" data-f="' + r + '" data-k="0" title="' + esc(titulo) + '">' +
         '<button class="lapiz" data-editar="1" title="Editar ' + esc(c0.nombre) + '" aria-label="Editar ' + esc(c0.nombre) + '">✎</button>' +
+        (c0.tipo === 'fijo' ? '<button class="cal-btn" data-cal="1" aria-pressed="' + (c0.calendario === 'si') + '" title="' + (c0.calendario === 'si' ? 'Marcado en el calendario (clic para quitarlo)' : 'Marcar en el calendario') + '" aria-label="Marcar ' + esc(c0.nombre) + ' en el calendario">📅</button>' : '') +
         (meta ? '<span class="meta">' + esc(meta) + '</span>' : '') +
         '<span class="tn">' + esc(c0.nombre) + '</span>' + (dia ? '<span class="dia">(' + dia + ')</span>' : '') +
-        (c0.medio ? '<span class="dia medio">(' + esc(abrevMedio(c0.medio)) + ')</span>' : '') + '</td>');
+        (c0.medio && c0.clase !== 'I' ? '<span class="dia medio">(' + esc(abrevMedio(c0.medio)) + ')</span>' : '') + '</td>');
       G.cols.forEach(function (c, k) {
         if (c.t === 'nombre') return;
         if (c.t === 'tot') { h.push('<td class="t" data-f="' + r + '" data-k="' + k + '">' + fmtN(valorFilaCol(f, c)) + '</td>'); return; }
@@ -188,7 +189,7 @@ function actualizarBotonArchivados() {
   var n = contarArchivados();
   b.hidden = !n && !S.verTodo;
   b.setAttribute('aria-pressed', String(S.verTodo));
-  b.textContent = (S.verTodo ? 'Ocultar archivados' : 'Mostrar archivados') + (n ? ' (' + n + ')' : '');
+  b.textContent = (S.verTodo ? 'Ocultar archivados' : 'Archivados') + (n ? ' (' + n + ')' : '');
   b.title = 'Filas que no corresponden a ' + etiquetaMesP(S.mesFoco).toLowerCase() + ': gastos eventuales de otros meses y conceptos que se dejaron de pagar';
 }
 function alternarArchivados() {
@@ -431,7 +432,7 @@ function pegar(e) {
 function iniciarGrilla() {
   var cont = $('grilla');
   cont.addEventListener('mousedown', function (e) {
-    if (e.target.closest('.mas') || e.target.closest('.lapiz')) return;
+    if (e.target.closest('.mas') || e.target.closest('.lapiz') || e.target.closest('.cal-btn')) return;
     var el = e.target.closest('[data-k][data-f]');
     if (!el || e.button === 2 && G.sel && el.classList.contains('sel')) return;
     var r = Number(el.dataset.f), k = Number(el.dataset.k);
@@ -448,7 +449,7 @@ function iniciarGrilla() {
     pintarSeleccion();
   });
   document.addEventListener('mouseup', function () { G.arrastrando = false; });
-  cont.addEventListener('dblclick', function (e) { if (e.target.closest('[data-k][data-f]') && !e.target.closest('.mas') && !e.target.closest('.lapiz')) editar(); });
+  cont.addEventListener('dblclick', function (e) { if (e.target.closest('[data-k][data-f]') && !e.target.closest('.mas') && !e.target.closest('.lapiz') && !e.target.closest('.cal-btn')) editar(); });
   cont.addEventListener('click', function (e) {
     var mas = e.target.closest('.mas');
     if (mas) {
@@ -457,6 +458,8 @@ function iniciarGrilla() {
       nuevaFila(fr.cat.nombre);
       return;
     }
+    var calBtn = e.target.closest('[data-cal]');
+    if (calBtn) { alternarCalendario(G.filas[Number(calBtn.closest('[data-f]').dataset.f)].c); return; }
     var lapizCat = e.target.closest('[data-editar-cat]');
     if (lapizCat) { abrirPanelCategoria(G.filas[Number(lapizCat.closest('[data-f]').dataset.f)].cat); return; }
     var lapiz = e.target.closest('[data-editar]');

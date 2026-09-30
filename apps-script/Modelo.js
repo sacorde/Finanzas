@@ -39,14 +39,17 @@ function categoriasBase_() {
 function normConcepto_(c, categorias) {
   var cat = buscarCategoria_(categorias || [], c.categoria);
   var tipo = cat ? cat.tipo : (c.tipo === 'eventual' ? 'eventual' : 'fijo');
+  var clase = cat ? cat.clase : (/^[IGA]$/.test(String(c.clase)) ? String(c.clase) : 'G');
   return {
     id: String(c.id), nombre: String(c.nombre || ''), categoria: cat ? cat.nombre : String(c.categoria || ''),
-    clase: cat ? cat.clase : (/^[IGA]$/.test(String(c.clase)) ? String(c.clase) : 'G'),
-    tipo: tipo, vence: tipo === 'fijo' ? String(c.vence == null ? '' : c.vence) : '', medio: String(c.medio || ''),
+    clase: clase,
+    // Los ingresos no llevan medio de pago
+    tipo: tipo, vence: tipo === 'fijo' ? String(c.vence == null ? '' : c.vence) : '', medio: clase === 'I' ? '' : String(c.medio || ''),
     // "No proyectar" (versiones anteriores) = no se repite
     meses: tipo === 'eventual' ? 'no' : String(c.proyeccion) === 'No proyectar' && !String(c.meses || '') ? 'no' : normMeses_(c.meses),
     proyeccion: tipo === 'eventual' ? 'Repetir' : normProyeccion_(c.proyeccion),
     formula: tipo === 'fijo' && parsearFormula_(c.formula) ? formulaTexto_(parsearFormula_(c.formula)) : '',
+    calendario: tipo === 'fijo' && esSi_(c.calendario) ? 'si' : '',
     orden: Number(c.orden) || 0
   };
 }

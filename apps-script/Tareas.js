@@ -35,5 +35,4 @@ function tareaDiaria() {
     var prox = String(hoy.getFullYear() + 1);
     if (hoy.getMonth() >= 9 && !Object.keys(leerFeriados()).some(function (k) { return k.indexOf(prox) === 0; })) actualizarFeriados_(hoy.getFullYear() + 1);
   } catch (e) { console.warn(e); }
-  try { sincronizarCalendario(); } catch (e) { console.warn(e); }
 }

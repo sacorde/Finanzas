@@ -58,7 +58,8 @@
 
   /* ---------- Planilla ---------- */
   .barra { display: flex; gap: 10px; align-items: center; padding: 10px 16px; flex-wrap: wrap; flex: none; }
-  .rapida { position: relative; flex: 1 1 360px; max-width: 620px; }
+  .rapida { position: relative; flex: 1 1 260px; max-width: 620px; }
+  @media (max-width: 1500px) { .leyenda-celdas { display: none; } }
   .rapida input { width: 100%; border: 1.5px solid var(--line); background: var(--surface); border-radius: 10px; padding: 9px 12px 9px 36px; font-size: 14px; }
   .rapida input:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 4px var(--accent-soft); }
   .rapida::before { content: "⚡"; position: absolute; left: 12px; top: 50%; transform: translateY(-50%); font-size: 14px; opacity: .8; }
@@ -259,6 +260,30 @@
   .opcion-p small { display: block; margin-top: 2px; font-size: 12px; color: var(--ink2); line-height: 1.4; }
   .aum-p { display: inline-flex; align-items: center; gap: 5px; margin-left: 6px; font-size: 12.5px; color: var(--ink2); }
   .campo-p .aum-p input { width: 54px; padding: 3px 6px; font-size: 13px; text-align: right; border-radius: 6px; }
+  .bloque-p { display: grid; gap: 10px; padding: 12px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface2); text-transform: none; letter-spacing: 0; }
+  .sub-p { font-size: 12px; font-weight: 700; color: var(--ink2); }
+  .dia-fila { display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 600; color: var(--ink); }
+  .dia-fila[hidden] { display: none !important; }
+  .campo-p .dia-fila input { width: 70px; text-align: center; font-variant-numeric: tabular-nums; padding: 7px 8px; }
+  .switch-p { display: flex; gap: 10px; align-items: flex-start; cursor: pointer; text-transform: none; letter-spacing: 0; font-size: 13px; font-weight: 500; color: var(--ink);
+    padding-top: 10px; border-top: 1px dashed var(--line); }
+  .switch-p.cal-p { border-top: 0; padding: 10px 12px; border: 1px solid var(--line); border-radius: 12px; }
+  .switch-p input { position: absolute; opacity: 0; pointer-events: none; }
+  .switch-p .sw { flex: none; width: 34px; height: 20px; border-radius: 999px; background: var(--axis); position: relative; transition: background .15s; margin-top: 1px; }
+  .switch-p .sw::after { content: ""; position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; border-radius: 50%; background: #fff; box-shadow: 0 1px 2px rgba(0,0,0,.25); transition: transform .15s; }
+  .switch-p input:checked + .sw { background: var(--accent); }
+  .switch-p input:checked + .sw::after { transform: translateX(14px); }
+  .switch-p input:focus-visible + .sw { box-shadow: 0 0 0 3px var(--accent-soft); }
+  .switch-p b { font-weight: 600; }
+  .switch-p small { display: block; margin-top: 2px; font-size: 12px; color: var(--ink2); line-height: 1.4; }
+  .switch-p.apagado { opacity: .45; cursor: default; }
+  table.g tr.item .n .cal-btn { float: right; width: 22px; height: 20px; margin-left: 2px; border: 1px solid transparent; border-radius: 6px; background: transparent;
+    font-size: 11.5px; line-height: 1; padding: 0; cursor: pointer; filter: grayscale(1); opacity: .25; }
+  table.g tr.item:hover .n .cal-btn, table.g td.n.cur .cal-btn { opacity: .6; }
+  table.g tr.item .n .cal-btn[aria-pressed="true"] { filter: none; opacity: 1; background: color-mix(in srgb, var(--g-cal) 14%, transparent); border-color: color-mix(in srgb, var(--g-cal) 40%, transparent); }
+  table.g tr.item.cl-I { --g-cal: var(--grp-I); } table.g tr.item.cl-G { --g-cal: var(--grp-G); } table.g tr.item.cl-A { --g-cal: var(--grp-A); }
+  #bSinc.girando .ico-sinc { display: inline-block; animation: girar .8s linear infinite; }
+  @keyframes girar { to { transform: rotate(360deg); } }
   .panel-pie { display: flex; gap: 8px; align-items: center; padding: 12px 16px calc(12px + env(safe-area-inset-bottom)); border-top: 1px solid var(--line); background: var(--surface2); }
   @media (min-width: 1100px) { body.con-panel .grilla-wrap { margin-right: 396px; } }
   table.g td.est { color: var(--muted); font-style: italic; }

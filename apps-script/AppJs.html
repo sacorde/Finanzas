@@ -292,6 +292,29 @@ function guardarCampo(c, campos) {
 
 function quitarTemporales() { S.temporales = []; }
 
+/* ---------- Calendario ---------- */
+/** Marca o desmarca un concepto en el calendario y sincroniza. */
+function alternarCalendario(c) {
+  if (!c.vence) { aviso('Primero elegí el día de ' + txtClase(c.clase).dia.toLowerCase() + ' en el panel', true); abrirPanel(c); return; }
+  var marcar = c.calendario !== 'si';
+  guardarCampo(c, { calendario: marcar ? 'si' : '' }).then(function (r) {
+    if (!r) return;
+    aviso(marcar ? '📅 ' + c.nombre + ' se marca en el calendario' : c.nombre + ' ya no está en el calendario');
+    sincronizarCalendarioApp(true);
+  });
+}
+
+/** Sincroniza Google Calendar con los cambios (botón de la barra, o después de marcar un concepto). */
+function sincronizarCalendarioApp(silencioso) {
+  var b = $('bSinc');
+  b.disabled = true; b.classList.add('girando');
+  return api('api_sincronizarCalendario').then(function (r) {
+    if (r.omitido) aviso('El calendario está desactivado en Ajustes', true);
+    else if (!silencioso) aviso('📅 Calendario sincronizado · ' + r.creados + ' nuevos · ' + r.actualizados + ' actualizados · ' + r.borrados + ' quitados');
+  }).catch(function (e) { aviso('No se pudo sincronizar el calendario: ' + e.message, true); })
+    .then(function () { b.disabled = false; b.classList.remove('girando'); });
+}
+
 function nuevaFila(categoria) {
   S.temporales = [{ t: 'nuevo', categoria: categoria }];
   if (S.colapsadas[categoria]) S.colapsadas[categoria] = false;
@@ -531,6 +554,7 @@ $('bMesAnt').onclick = function () { elegirMes(sumarMesP(S.mesFoco, -1)); };
 $('bMesSig').onclick = function () { elegirMes(sumarMesP(S.mesFoco, 1)); };
 $('bHoy').onclick = function () { elegirMes(S.mesHoy); };
 $('bPlegar').onclick = plegarTodo;
+$('bSinc').onclick = function () { sincronizarCalendarioApp(false); };
 $('bArchivados').onclick = alternarArchivados;
 iniciarGrilla();
 iniciar();

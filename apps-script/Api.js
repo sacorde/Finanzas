@@ -18,6 +18,7 @@ function api_estado() {
 /** Todo lo necesario para dibujar la app. */
 function api_datos() {
   actualizarEsquema_();
+  try { asegurarDisparadores_(); } catch (e) { console.warn(e); }
   var m = cargarModelo_();
   var hoy = new Date();
   var cfgRaw = {};
@@ -106,7 +107,7 @@ function api_guardarConcepto(c) {
     if (c.id && !existente) throw new Error('Ese concepto ya no existe. Recargá la página.');
     var base = existente || { id: nuevoId_(), categoria: c.categoria, orden: 1e9 };
     var datos = {};
-    ['id', 'nombre', 'categoria', 'vence', 'medio', 'meses', 'proyeccion', 'formula', 'orden'].forEach(function (k) { datos[k] = c.hasOwnProperty(k) && k !== 'id' && k !== 'orden' ? c[k] : base[k]; });
+    ['id', 'nombre', 'categoria', 'vence', 'medio', 'meses', 'proyeccion', 'formula', 'calendario', 'orden'].forEach(function (k) { datos[k] = c.hasOwnProperty(k) && k !== 'id' && k !== 'orden' ? c[k] : base[k]; });
     datos.nombre = String(datos.nombre || '').trim();
     if (!datos.nombre) throw new Error('El concepto necesita un nombre.');
     var cat = buscarCategoria_(m.categorias, datos.categoria);
@@ -115,6 +116,7 @@ function api_guardarConcepto(c) {
     if (existente && cat.nombre !== existente.categoria) datos.orden = 1e9;
     var regla = parsearRegla(datos.vence);
     if (regla && regla.error) throw new Error(regla.error);
+    if (esSi_(datos.calendario) && !regla) throw new Error('Para marcarlo en el calendario, primero elegí el día (✎ → ' + txtFecha_(cat.clase) + ').');
     if (datos.formula) {
       var f = parsearFormula_(datos.formula);
       if (!f) throw new Error('No entendí la fórmula "' + datos.formula + '". Ejemplos: Ingresos*20% · Gastos+1000000');
@@ -304,3 +306,6 @@ function api_actualizarIndices() {
 function api_sincronizarCalendario() {
   return sincronizarCalendario();
 }
+
+/** Nombre del campo de fecha según la clase: Cobro, Vence o Aporte. */
+function txtFecha_(clase) { return clase === 'I' ? 'Cobro' : clase === 'A' ? 'Aporte' : 'Vence'; }

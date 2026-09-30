@@ -90,17 +90,27 @@ function abrirPanel(c) {
   }
   if (fijo) {
     var sel = selectorDesdeRegla(c.vence);
+    PANEL.venceModo = sel.otra ? 'otra' : sel.fin ? sel.fin : sel.dia ? 'dia' : '';
     h.push('<div class="campo-p">' + esc(txtClase(c.clase).dia) +
-      '<div class="vence-sel">' +
-        '<label class="dia-sel"><span>Día</span><input id="pDia" type="number" min="1" max="28" step="1" inputmode="numeric" placeholder="—" value="' + esc(sel.dia) + '"' + (sel.fin ? ' disabled' : '') + '></label>' +
-        '<label class="check"><input type="checkbox" id="pUlt"' + (sel.fin === 'ultimo' ? ' checked' : '') + '> Último día</label>' +
-        '<label class="check"><input type="checkbox" id="pAnt"' + (sel.fin === 'anteultimo' ? ' checked' : '') + '> Anteúltimo día</label>' +
+      '<div class="bloque-p">' +
+        // 1) Qué día del mes
+        '<div class="sub-p">¿Qué día?</div>' +
+        '<div class="seg-p seg-lleno" id="pDiaModo">' + [['dia', 'Un día del mes'], ['ultimo', 'Último día'], ['anteultimo', 'Anteúltimo'], ['', 'Sin fecha']].map(function (o) {
+          return '<button type="button" data-modo="' + o[0] + '" aria-pressed="' + (o[0] === PANEL.venceModo) + '">' + o[1] + '</button>';
+        }).join('') + '</div>' +
+        '<label class="dia-fila" id="pDiaFila"><span>Día</span><input id="pDia" type="number" min="1" max="28" step="1" inputmode="numeric" placeholder="10" value="' + esc(sel.dia) + '"><span class="ayuda-p">del 1 al 28</span></label>' +
+        // 2) Si tiene que ser hábil
+        '<label class="switch-p" id="pHabilFila"><input type="checkbox" id="pHabil"' + (sel.habil ? ' checked' : '') + '><span class="sw"></span>' +
+          '<span><b>Solo días hábiles</b><small id="pHabilInfo"></small></span></label>' +
       '</div>' +
-      '<label class="check habil"><input type="checkbox" id="pHabil"' + (sel.habil ? ' checked' : '') + '> <span><b>Hábil</b> <span class="ayuda-p" id="pHabilInfo"></span></span></label>' +
       (sel.otra ? '<span class="ayuda-p aviso-p">Regla actual: <b>' + esc(c.vence) + '</b>. Se mantiene mientras no elijas otra.</span>' : '') +
-      '<span class="ayuda-p" id="pVenceInfo"></span></div>');
+      '<span class="ayuda-p" id="pVenceInfo"></span>' +
+      // 3) Calendario
+      '<label class="switch-p cal-p" id="pCalFila"><input type="checkbox" id="pCal"' + (c.calendario === 'si' ? ' checked' : '') + '><span class="sw"></span>' +
+        '<span><b>📅 Marcar en el calendario</b><small>Aparece en Google Calendar en ' + ({ I: 'verde', G: 'rojo', A: 'azul' })[c.clase] + '. Se sincroniza con el botón ⟳ Sincronizar y todos los días a las 20 h.</small></span></label>' +
+      '</div>');
   }
-  h.push('<label class="campo-p">Medio de pago<input id="pMedio" list="dlMedios" autocomplete="off" placeholder="Débito automático, Transferencia, Tarjeta VISA…" value="' + esc(c.medio) + '">' +
+  if (c.clase !== 'I') h.push('<label class="campo-p">Medio de pago<input id="pMedio" list="dlMedios" autocomplete="off" placeholder="Débito automático, Transferencia, Tarjeta VISA…" value="' + esc(c.medio) + '">' +
     '<span class="ayuda-p">Se muestra junto al nombre: Débito automático (DA), Transferencia (T), Efectivo (EF), Mercado Pago (MP), tarjetas (VISA, AMEX…).' +
     (fijo ? ' Con débito automático, el monto se confirma solo el día del vencimiento.' : '') + '</span></label>');
   if (fijo) {
@@ -118,8 +128,14 @@ function abrirPanel(c) {
       if (d !== '' && Number(d) < 1) $('pDia').value = 1;
       cambio();
     });
-    $('pUlt').onchange = function () { if ($('pUlt').checked) $('pAnt').checked = false; $('pDia').disabled = $('pUlt').checked || $('pAnt').checked; cambio(); };
-    $('pAnt').onchange = function () { if ($('pAnt').checked) $('pUlt').checked = false; $('pDia').disabled = $('pUlt').checked || $('pAnt').checked; cambio(); };
+    $('pDiaModo').querySelectorAll('[data-modo]').forEach(function (b) {
+      b.onclick = function () {
+        PANEL.venceModo = b.dataset.modo;
+        if (PANEL.venceModo === 'dia' && !$('pDia').value) { $('pDia').value = 10; }
+        cambio();
+        if (PANEL.venceModo === 'dia') { $('pDia').focus(); $('pDia').select(); }
+      };
+    });
     $('pHabil').onchange = cambio;
     $('pRep').querySelectorAll('[data-rep]').forEach(function (b) { b.onclick = function () { PANEL.rep = b.dataset.rep; actualizarRepeticion(); }; });
     $('pMesesSel').querySelectorAll('[data-mes]').forEach(function (b) {
@@ -189,12 +205,25 @@ function previaFx() {
 function reglaElegida() {
   var c = PANEL.c;
   if (!PANEL.tocado) return c.vence || '';
-  return reglaDesdeSelector({ dia: $('pDia').value, fin: $('pUlt').checked ? 'ultimo' : $('pAnt').checked ? 'anteultimo' : '', habil: $('pHabil').checked });
+  var modo = PANEL.venceModo;
+  if (!modo) return '';
+  return reglaDesdeSelector({ dia: modo === 'dia' ? $('pDia').value : '', fin: modo === 'dia' ? '' : modo, habil: $('pHabil').checked });
 }
 
+/** Actualiza el selector de fecha: botón elegido, campo del día, texto de "hábil" y el calendario. */
 function textoHabil() {
-  var fin = $('pUlt').checked ? 'último' : $('pAnt').checked ? 'anteúltimo' : '';
-  $('pHabilInfo').textContent = fin ? '(el ' + fin + ' día hábil del mes)' : '(si cae sábado, domingo o feriado, se paga el hábil siguiente)';
+  var modo = PANEL.venceModo, verbo = txtClase(PANEL.c.clase).verbo;
+  $('pDiaModo').querySelectorAll('[data-modo]').forEach(function (b) { b.setAttribute('aria-pressed', String(b.dataset.modo === modo)); });
+  $('pDiaFila').hidden = modo !== 'dia';
+  $('pHabilFila').classList.toggle('apagado', !modo || modo === 'otra');
+  $('pHabil').disabled = !modo || modo === 'otra';
+  $('pHabilInfo').textContent = modo === 'ultimo' || modo === 'anteultimo'
+    ? 'Se toma el ' + (modo === 'ultimo' ? 'último' : 'anteúltimo') + ' día hábil del mes (sin sábados, domingos ni feriados).'
+    : 'Si el día cae sábado, domingo o feriado, ' + verbo + ' el hábil siguiente.';
+  var sinFecha = !modo;
+  $('pCal').disabled = sinFecha;
+  if (sinFecha) $('pCal').checked = false;
+  $('pCalFila').classList.toggle('apagado', sinFecha);
 }
 
 /** Las fechas ya calculadas para este concepto, desde el mes elegido. */
@@ -234,7 +263,8 @@ function guardarConceptoPanel() {
   if (nombre !== c.nombre) campos.nombre = nombre;
   if ($('pCat').value !== c.categoria) campos.categoria = $('pCat').value;
   if (c.tipo === 'fijo') { var regla = reglaElegida(); if (regla !== (c.vence || '')) campos.vence = regla; }
-  if ($('pMedio').value.trim() !== (c.medio || '')) campos.medio = $('pMedio').value.trim();
+  if ($('pMedio') && $('pMedio').value.trim() !== (c.medio || '')) campos.medio = $('pMedio').value.trim();
+  if (c.tipo === 'fijo') { var cal = $('pCal').checked ? 'si' : ''; if (cal !== (c.calendario || '')) campos.calendario = cal; }
   if (c.tipo === 'fijo') {
     if (PANEL.rep === 'algunos' && !PANEL.meses.length) { aviso('Marcá al menos un mes', true); return; }
     var meses = PANEL.rep === 'no' ? 'no' : PANEL.rep === 'algunos' ? PANEL.meses.join(',') : '';
@@ -259,7 +289,11 @@ function guardarConceptoPanel() {
   var cambiaMonto = monto !== montoPanel(v) || (v && v.e && monto);
   cerrarPanel();
   if (cambiaMonto) aplicarCambios([{ c: c.id, mes: S.mesFoco, texto: monto }]);
-  if (Object.keys(campos).length) guardarCampo(c, campos).then(function (r) { if (r && !campos.vence) aviso('✓ ' + (campos.nombre || c.nombre) + ' actualizado'); });
+  var sinc = campos.hasOwnProperty('calendario') || (c.calendario === 'si' && (campos.vence !== undefined || campos.nombre));
+  if (Object.keys(campos).length) guardarCampo(c, campos).then(function (r) {
+    if (r && !campos.vence) aviso('✓ ' + (campos.nombre || c.nombre) + ' actualizado');
+    if (r && sinc) sincronizarCalendarioApp(true);
+  });
   else if (cambiaMonto) aviso('✓ Monto de ' + etiquetaMesP(S.mesFoco) + ' guardado');
 }
 

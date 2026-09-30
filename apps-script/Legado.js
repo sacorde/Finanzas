@@ -296,6 +296,7 @@ function filasAdb_(filas, movimientos) {
     });
   });
   completarIngresos_(m);
+  marcarCalendario_(m.conceptos);
   renumerar_(m);
   return { conceptos: m.conceptos, valores: aplanarValores_(m.valores, m.conceptos), categorias: m.categorias };
 }

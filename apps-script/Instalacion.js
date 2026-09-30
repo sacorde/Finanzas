@@ -82,10 +82,23 @@ function pasoIndices_() {
   return { ok: true, detalle: 'Descargados: ' + partes.join(' · ') };
 }
 
+var DISPARADORES_ = [{ fn: 'tareaDiaria', hora: 7 }, { fn: 'tareaCalendario', hora: 20 }];
+var DISPARADORES_V_ = '2';
+
 function instalarDisparadores_(ss) {
   ScriptApp.getProjectTriggers().forEach(function (t) { ScriptApp.deleteTrigger(t); });
-  ScriptApp.newTrigger('tareaDiaria').timeBased().everyDays(1).atHour(7).create();
-  return { ok: true, detalle: 'Tarea diaria programada (7 AM): cierre de mes, débitos automáticos, índices y calendario.' };
+  DISPARADORES_.forEach(function (d) { ScriptApp.newTrigger(d.fn).timeBased().everyDays(1).atHour(d.hora).create(); });
+  PropertiesService.getScriptProperties().setProperty('disparadoresV', DISPARADORES_V_);
+  return { ok: true, detalle: 'Tareas programadas: 7 AM cierre de mes, débitos automáticos e índices · 20 h calendario.' };
+}
+
+/** Crea las tareas automáticas que falten (instalaciones de versiones anteriores). Corre al abrir la app. */
+function asegurarDisparadores_() {
+  var props = PropertiesService.getScriptProperties();
+  if (props.getProperty('disparadoresV') === DISPARADORES_V_) return;
+  var hay = ScriptApp.getProjectTriggers().map(function (t) { return t.getHandlerFunction(); });
+  DISPARADORES_.forEach(function (d) { if (hay.indexOf(d.fn) < 0) ScriptApp.newTrigger(d.fn).timeBased().everyDays(1).atHour(d.hora).create(); });
+  props.setProperty('disparadoresV', DISPARADORES_V_);
 }
 
 function resumenCalendario_(r) {
@@ -138,10 +151,14 @@ function actualizarEsquema_() {
   if (!dbInstalada_()) return false;
   var cab = cabecera_(hojaTabla_(FZ.T.CONCEPTOS));
   if (cab.indexOf('seccion') < 0 && cab.join('|') !== ESQUEMA.Conceptos.cols.join('|')) {
-    // Columnas nuevas (ej. "formula"): se reescribe la tabla con el encabezado actual
+    // Columnas nuevas (ej. "formula", "calendario"): se reescribe la tabla con el encabezado actual
     return conLock_(function () {
-      if (cabecera_(hojaTabla_(FZ.T.CONCEPTOS)).join('|') === ESQUEMA.Conceptos.cols.join('|')) return false;
-      escribirTabla(FZ.T.CONCEPTOS, cargarModelo_().conceptos);
+      var cab2 = cabecera_(hojaTabla_(FZ.T.CONCEPTOS));
+      if (cab2.join('|') === ESQUEMA.Conceptos.cols.join('|')) return false;
+      var conceptos = cargarModelo_().conceptos;
+      // Antes se sincronizaban todos los conceptos con fecha: quedan marcados
+      if (cab2.indexOf('calendario') < 0) marcarCalendario_(conceptos);
+      escribirTabla(FZ.T.CONCEPTOS, conceptos);
       return true;
     });
   }
@@ -170,10 +187,19 @@ function actualizarEsquema_() {
       sh.setName('Movimientos (versión anterior)');
     }
     completarIngresos_(m);
+    marcarCalendario_(m.conceptos);
     guardarConceptos_(m);
     guardarValores_(m);
     reproyectar_(m, null);
     guardarValores_(m);
     return true;
+  });
+}
+
+/** Marca en el calendario los conceptos fijos que tienen fecha (lo que se sincronizaba en versiones anteriores). */
+function marcarCalendario_(conceptos) {
+  conceptos.forEach(function (c) {
+    var r = parsearRegla(c.vence);
+    if (c.tipo === 'fijo' && r && !r.error) c.calendario = 'si';
   });
 }

@@ -2,10 +2,18 @@
  * Finanzas · Sincronización con Google Calendar
  *
  * Crea un calendario propio ("Finanzas") con un evento de día completo por cada
- * vencimiento: "💸 Alquiler · $ 1.000.000". Se actualiza sola todos los días:
+ * fecha de los conceptos marcados (📅): "💸 Alquiler · $ 1.000.000".
+ * Colores: ingresos verde, gastos rojo, ahorro e inversión azul.
+ * Se sincroniza con el botón "Sincronizar" y sola todos los días a las 20 h:
  * si cambia el monto o la fecha, se corrige el evento; si ya está confirmado
  * (pagado), el título pasa a "✓". Nunca toca otros calendarios.
  */
+
+/** Color del evento según la clase del concepto. */
+function colorEvento_(clase) {
+  var C = CalendarApp.EventColor;
+  return clase === 'I' ? C.GREEN : clase === 'A' ? C.BLUE : C.RED;
+}
 
 function obtenerCalendario_(nombre) {
   var cals = CalendarApp.getCalendarsByName(nombre);
@@ -24,7 +32,7 @@ function eventosDeseados_(conceptos, valores, meses, fer, hoy) {
   var out = {};
   conceptos.forEach(function (c) {
     var regla = parsearRegla(c.vence);
-    if (c.tipo !== 'fijo' || !regla || regla.error) return;
+    if (c.tipo !== 'fijo' || c.calendario !== 'si' || !regla || regla.error) return;
     meses.forEach(function (mes) {
       var v = valores[c.id] && valores[c.id][mes];
       if (!v || !v.monto) return;
@@ -37,6 +45,7 @@ function eventosDeseados_(conceptos, valores, meses, fer, hoy) {
       var clave = c.id + '@' + mes;
       out[clave] = {
         fecha: fecha,
+        color: colorEvento_(c.clase),
         titulo: (pagado ? '✓ ' : '') + icono + ' ' + c.nombre + ' · ' + fmtPesos_(v.monto),
         desc: [describirRegla(regla), c.medio ? 'Medio: ' + c.medio : '', confirmado ? 'Monto confirmado' : 'Monto estimado', 'Generado por Finanzas'].filter(String).join('\n')
       };
@@ -68,6 +77,7 @@ function sincronizarCalendario() {
     if (ev.getTitle() !== d.titulo) { ev.setTitle(d.titulo); cambio = true; }
     if (ev.getDescription() !== d.desc) { ev.setDescription(d.desc); cambio = true; }
     if (!inicio || claveDia_(inicio) !== claveDia_(d.fecha)) { ev.setAllDayDate(d.fecha); cambio = true; }
+    if (String(ev.getColor()) !== String(d.color)) { ev.setColor(d.color); cambio = true; }
     if (cambio) res.actualizados++;
     delete deseados[clave];
   });
@@ -76,9 +86,18 @@ function sincronizarCalendario() {
     var d = deseados[clave];
     var ev = cal.createAllDayEvent(d.titulo, d.fecha, { description: d.desc });
     ev.setTag('fz', clave);
+    ev.setColor(d.color);
     ev.removeAllReminders();
     if (minutos > 0) ev.addPopupReminder(minutos);
     res.creados++;
   });
+  PropertiesService.getScriptProperties().setProperty('calendarioTs', new Date().toISOString());
   return res;
+}
+
+/** Tarea automática de las 20 h: sincroniza el calendario con los cambios del día. */
+function tareaCalendario() {
+  if (!dbInstalada_()) return;
+  actualizarEsquema_();
+  sincronizarCalendario();
 }

@@ -293,13 +293,32 @@ test('una base de la versión 5 sin columna "formula" se actualiza sola', () => 
   assert.deepStrictEqual(plano(G5.api_hojasSobrantes()), []);
 });
 
-test('tarea diaria: calendario idempotente', () => {
-  G.tareaDiaria();
-  const n = env.eventos.filter((e) => !e._borrado).length;
+test('calendario: solo los conceptos marcados, con colores por grupo, idempotente', () => {
+  const d0 = G.api_datos();
+  assert.strictEqual(d0.conceptos.find((c) => c.nombre === 'Luz').calendario, 'si', 'al instalar se marcan los que tienen fecha');
+  assert.strictEqual(d0.conceptos.find((c) => c.nombre === 'Salario').medio, '', 'los ingresos no llevan medio de pago');
+  G.tareaCalendario();
+  const vivos = () => env.eventos.filter((e) => !e._borrado);
+  const n = vivos().length;
   assert.ok(n > 0);
-  assert.ok(env.eventos.some((e) => /Luz/.test(e._t)));
-  G.tareaDiaria();
-  assert.strictEqual(env.eventos.filter((e) => !e._borrado).length, n);
+  const luz = vivos().find((e) => /Luz/.test(e._t)), sal = vivos().find((e) => /Salario/.test(e._t));
+  assert.strictEqual(luz._color, '11', 'gastos en rojo');
+  assert.strictEqual(sal._color, '10', 'ingresos en verde');
+  G.tareaCalendario();
+  assert.strictEqual(vivos().length, n, 'no duplica');
+  // Desmarcar Luz: su evento se borra
+  G.api_guardarConcepto({ id: concepto('Luz').id, calendario: '' });
+  G.api_sincronizarCalendario();
+  assert.ok(!vivos().some((e) => /Luz/.test(e._t)));
+  G.api_guardarConcepto({ id: concepto('Luz').id, calendario: 'si' });
+  assert.throws(() => G.api_guardarConcepto({ id: concepto('Aguinaldo').id, calendario: 'si' }), /primero elegí el día/);
+  // Tareas automáticas: 7 AM y 20 h (se crean solas en instalaciones anteriores)
+  const fns = () => G.ScriptApp.getProjectTriggers().map((t) => t.getHandlerFunction()).sort();
+  assert.deepStrictEqual(fns(), ['tareaCalendario', 'tareaDiaria']);
+  G.ScriptApp._triggers = G.ScriptApp._triggers.filter((t) => t.getHandlerFunction() === 'tareaDiaria');
+  G.PropertiesService.getScriptProperties().deleteProperty('disparadoresV');
+  G.api_datos();
+  assert.deepStrictEqual(fns(), ['tareaCalendario', 'tareaDiaria']);
 });
 
 test('configuración y feriados', () => {
@@ -416,9 +435,11 @@ test('actualiza sola una base de la versión 4 a categorías de un solo nivel', 
   assert.ok(valor(d, 'e1', '2026-03'));
   assert.ok(valor(d, 'g1', '2026-10'), 'sigue proyectando');
   assert.deepStrictEqual(d.categorias.map((c) => c.nombre).length, 9);
-  assert.deepStrictEqual(env4.ss.getSheetByName('Conceptos').getRange(1, 1, 1, 11).getValues()[0], ['id', 'nombre', 'categoria', 'clase', 'tipo', 'vence', 'medio', 'meses', 'proyeccion', 'formula', 'orden']);
+  assert.deepStrictEqual(env4.ss.getSheetByName('Conceptos').getRange(1, 1, 1, 12).getValues()[0], ['id', 'nombre', 'categoria', 'clase', 'tipo', 'vence', 'medio', 'meses', 'proyeccion', 'formula', 'calendario', 'orden']);
   assert.deepStrictEqual(env4.ss.getSheetByName('Categorias').getRange(1, 1, 1, 5).getValues()[0], ['nombre', 'clase', 'tipo', 'color', 'orden']);
-  assert.strictEqual(env4.ss.getSheetByName('Conceptos').getLastColumn(), 11);
+  assert.strictEqual(env4.ss.getSheetByName('Conceptos').getLastColumn(), 12);
+  assert.strictEqual(d.conceptos.find((c) => c.id === 'g3').calendario, 'si', 'lo que tenía fecha queda marcado en el calendario');
+  assert.strictEqual(d.conceptos.find((c) => c.id === 'g1').calendario, '');
   assert.deepStrictEqual(plano(G4.api_hojasSobrantes()), [], 'las tablas actualizadas no se ofrecen para borrar');
   assert.strictEqual(plano(G4.api_datos()).conceptos.length, d.conceptos.length, 'no se repite');
 });

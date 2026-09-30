@@ -155,7 +155,8 @@ function crearEntorno(ctx) {
         getTag: (k) => e._tags[k] || null, setTag: (k, v) => { e._tags[k] = v; return e; },
         getTitle: () => e._t, setTitle: (x) => { e._t = x; return e; }, getDescription: () => e._desc || '', setDescription: (x) => { e._desc = x; return e; },
         getAllDayStartDate: () => e._d, setAllDayDate: (x) => { e._d = x; return e; }, deleteEvent: () => { e._borrado = true; },
-        removeAllReminders: () => { e._rem = []; return e; }, addPopupReminder: (m) => { e._rem.push(m); return e; } };
+        removeAllReminders: () => { e._rem = []; return e; }, addPopupReminder: (m) => { e._rem.push(m); return e; },
+        getColor: () => e._color || '', setColor: (c) => { e._color = c; return e; } };
       eventos.push(e); return e;
     }
   };
@@ -170,7 +171,7 @@ function crearEntorno(ctx) {
     PropertiesService: { getDocumentProperties: () => doc, getUserProperties: () => user, getScriptProperties: () => script },
     LockService: { getScriptLock: () => ({ waitLock() {}, releaseLock() {} }) },
     UrlFetchApp: { fetch: () => { throw new Error('sin red en tests'); } },
-    CalendarApp: { getCalendarsByName: () => [], createCalendar: () => cal, getCalendarById: () => { throw new Error('sin calendario'); }, Color: { GREEN: 'GREEN' } },
+    CalendarApp: { getCalendarsByName: () => [], createCalendar: () => cal, getCalendarById: () => { throw new Error('sin calendario'); }, Color: { GREEN: 'GREEN' }, EventColor: { GREEN: '10', RED: '11', BLUE: '9' } },
     ScriptApp: {
       _triggers: [],
       getProjectTriggers() { return this._triggers.slice(); },
