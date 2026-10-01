@@ -5,7 +5,7 @@
 #   Secretos del repo (Settings → Secrets and variables → Actions):
 #     CLASPRC_JSON   contenido de ~/.clasprc.json tras `npx @google/clasp@2.4.2 login`
 #     SCRIPT_ID      ID del proyecto de Apps Script
-#     DEPLOYMENT_ID  (opcional) ID de la implementación web, para actualizar la app del celular
+#     DEPLOYMENT_ID  (opcional) no hace falta: todas las implementaciones /exec del proyecto se actualizan solas
 
 name: Deploy a Apps Script
 
@@ -53,18 +53,28 @@ jobs:
           printf '{"scriptId":"%s","rootDir":"apps-script"}' "$SCRIPT_ID" > .clasp.json
 
       - name: URL de la app
-        # La app se sirve desde la implementación de prueba (@HEAD): siempre muestra el último código,
-        # sin crear versiones. La URL se guarda en UrlWeb.js para el menú de la planilla.
+        # Implementaciones del proyecto:
+        #  - @HEAD (/dev): siempre muestra el último código.
+        #  - Las demás (/exec, creadas con "Implementar → Nueva implementación"): tienen una versión fija,
+        #    así que se actualizan en el paso "Actualizar implementaciones /exec".
+        # La URL que usa el menú de la planilla es la /exec si existe; si no, la /dev.
+        env:
+          DEPLOYMENT_ID: ${{ secrets.DEPLOYMENT_ID }}
         run: |
           DEPS=$(npx --yes @google/clasp@2.4.2 deployments 2>&1 || true)
           echo "$DEPS"
-          HEAD_ID=$(echo "$DEPS" | grep '@HEAD' | grep -o 'AKfy[A-Za-z0-9_-]*' | head -1)
-          if [ -n "$HEAD_ID" ]; then
-            URL="https://script.google.com/macros/s/$HEAD_ID/dev"
+          HEAD_ID=$(echo "$DEPS" | grep '@HEAD' | grep -o 'AKfy[A-Za-z0-9_-]*' | head -1 || true)
+          EXEC_IDS=$( { echo "$DEPS" | grep -v '@HEAD' | grep -o 'AKfy[A-Za-z0-9_-]*' || true; echo "${DEPLOYMENT_ID:-}"; } | grep . | sort -u | tr '\n' ' ' || true)
+          echo "EXEC_IDS=$EXEC_IDS" >> "$GITHUB_ENV"
+          PRIMERA=$(echo "$EXEC_IDS" | awk '{print $1}')
+          if [ -n "$PRIMERA" ]; then URL="https://script.google.com/macros/s/$PRIMERA/exec"
+          elif [ -n "$HEAD_ID" ]; then URL="https://script.google.com/macros/s/$HEAD_ID/dev"
+          fi
+          if [ -n "$URL" ]; then
             echo "var FZ_URL_WEB = '$URL';" > apps-script/UrlWeb.js
             echo "URL_APP=$URL" >> "$GITHUB_ENV"
           else
-            echo "::warning::No encontré la implementación @HEAD; la URL se muestra en el editor (Implementar → Implementaciones de prueba)."
+            echo "::warning::No encontré implementaciones; la URL se muestra en el editor (Implementar → Implementaciones de prueba)."
           fi
 
       - name: Subir código
@@ -83,12 +93,21 @@ jobs:
           echo "## ✅ Código subido a Apps Script" >> "$GITHUB_STEP_SUMMARY"
           if [ -n "$URL_APP" ]; then echo "🔗 **App:** $URL_APP" >> "$GITHUB_STEP_SUMMARY"; echo "URL de la app: $URL_APP"; fi
 
-      - name: Actualizar app web
-        env:
-          DEPLOYMENT_ID: ${{ secrets.DEPLOYMENT_ID }}
-        if: env.DEPLOYMENT_ID != ''
-        run: npx --yes @google/clasp@2.4.2 deploy --deploymentId "$DEPLOYMENT_ID" --description "GitHub ${GITHUB_SHA::7}"
+      - name: Actualizar implementaciones /exec
+        # Cada implementación /exec pasa a una versión nueva con el código recién subido (misma URL).
+        if: env.EXEC_IDS != ''
+        run: |
+          set -o pipefail
+          for ID in $EXEC_IDS; do
+            echo "Actualizando $ID"
+            npx --yes @google/clasp@2.4.2 deploy --deploymentId "$ID" --description "GitHub ${GITHUB_SHA::7}" 2>&1 | tee deploy.log
+            if grep -qiE "error|not found|permission" deploy.log; then
+              echo "::error::No se pudo actualizar la implementación $ID. Ver el mensaje de arriba."
+              exit 1
+            fi
+            echo "✅ https://script.google.com/macros/s/$ID/exec" >> "$GITHUB_STEP_SUMMARY"
+          done
 
       - name: Limpiar credenciales
         if: always()
-        run: rm -f ~/.clasprc.json .clasp.json push.log apps-script/UrlWeb.js
+        run: rm -f ~/.clasprc.json .clasp.json push.log deploy.log apps-script/UrlWeb.js
