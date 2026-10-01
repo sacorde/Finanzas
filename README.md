@@ -75,7 +75,7 @@ Todo se agrega y se modifica en las celdas:
 | Cuándo se repite | En el panel: **Todos los meses**, **Algunos meses** (ej. aguinaldo en junio y diciembre) o **No se repite**. |
 | Con qué monto | **Igual al último**, **Ajustado por inflación**, **Aumento fijo X % por mes** o **Promedio de los últimos 3**. |
 | Cobro / Vence / Aporte | El día se llama *Cobro* en ingresos, *Vence* en gastos y *Aporte* en ahorro e inversión. En el panel: **¿Qué día?** (un día del 1 al 28, último día, anteúltimo o sin fecha) y aparte **Solo días hábiles**. Los ingresos no llevan medio de pago. |
-| Calendario | Botón **📅** en cada concepto (o el interruptor del panel) para marcarlo en Google Calendar: ingresos en verde, gastos en rojo, ahorro en azul. **⟳ Sincronizar** en la barra, y solo todos los días a las 20 h. |
+| Calendario | Interruptor **📅 Marcar en el calendario** en el panel del concepto (✎). En Google Calendar el evento lleva solo el nombre (el monto va en la descripción): ingresos en verde, gastos en rojo, ahorro en azul. **⟳ Sincronizar** en la barra, y solo todos los días a las 20 h. |
 | Fórmula (ƒx) | En el panel del concepto, botón **ƒx** junto al monto: base (Total de ingresos, Total de gastos u otro concepto), operación (× %, + o −) y número. Ej.: Ingresos × 20 %, Gastos + 1.000.000. Desde el mes actual cada mes se calcula solo; un monto escrito a mano en una celda se respeta. |
 | Archivados | Las filas que no corresponden al mes elegido (gastos eventuales de otros meses, conceptos que se dejaron de pagar) se ocultan. **Mostrar archivados** las muestra; al navegar a su mes aparecen solas. |
 | Editar una categoría | Lápiz **✎** junto al nombre de la categoría: nombre, color, si suma como ingreso, gasto o ahorro, y eliminar. |

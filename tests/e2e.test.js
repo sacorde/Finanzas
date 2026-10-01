@@ -306,12 +306,24 @@ test('calendario: solo los conceptos marcados, con colores por grupo, idempotent
   assert.strictEqual(sal._color, '10', 'ingresos en verde');
   G.tareaCalendario();
   assert.strictEqual(vivos().length, n, 'no duplica');
+  assert.ok(vivos().every((e) => !/[💰💸🏦✓$]/u.test(e._t)), 'el título es solo el nombre');
+  assert.ok(vivos().some((e) => e._t === 'Luz' && /Monto: \$/.test(e._desc)), 'el monto va en la descripción');
   // Desmarcar Luz: su evento se borra
   G.api_guardarConcepto({ id: concepto('Luz').id, calendario: '' });
   G.api_sincronizarCalendario();
   assert.ok(!vivos().some((e) => /Luz/.test(e._t)));
   G.api_guardarConcepto({ id: concepto('Luz').id, calendario: 'si' });
   assert.throws(() => G.api_guardarConcepto({ id: concepto('Aguinaldo').id, calendario: 'si' }), /primero elegí el día/);
+  // Si Google rechaza un evento, se sigue con los demás y se informa
+  vivos().forEach((e) => { e._borrado = true; });
+  const crear = env.ss && G.CalendarApp.createCalendar().createAllDayEvent;
+  const calObj = G.CalendarApp.createCalendar();
+  calObj.createAllDayEvent = (t, d, o) => { if (t === 'Salario') throw new Error('Service invoked too many times'); return crear(t, d, o); };
+  const rs = plano(G.api_sincronizarCalendario());
+  calObj.createAllDayEvent = crear;
+  assert.ok(rs.errores.length >= 1 && /Salario/.test(rs.errores[0]));
+  assert.ok(vivos().some((e) => e._t === 'Luz'), 'el resto se crea igual');
+  assert.ok(rs.marcados.includes('Luz'));
   // Tareas automáticas: 7 AM y 20 h (se crean solas en instalaciones anteriores)
   const fns = () => G.ScriptApp.getProjectTriggers().map((t) => t.getHandlerFunction()).sort();
   assert.deepStrictEqual(fns(), ['tareaCalendario', 'tareaDiaria']);

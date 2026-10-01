@@ -2,11 +2,13 @@
  * Finanzas · Sincronización con Google Calendar
  *
  * Crea un calendario propio ("Finanzas") con un evento de día completo por cada
- * fecha de los conceptos marcados (📅): "💸 Alquiler · $ 1.000.000".
+ * fecha de los conceptos marcados (📅). El título es solo el nombre ("Alquiler");
+ * el monto y el detalle van en la descripción.
  * Colores: ingresos verde, gastos rojo, ahorro e inversión azul.
  * Se sincroniza con el botón "Sincronizar" y sola todos los días a las 20 h:
- * si cambia el monto o la fecha, se corrige el evento; si ya está confirmado
- * (pagado), el título pasa a "✓". Nunca toca otros calendarios.
+ * si cambia el monto o la fecha, se corrige el evento. Nunca toca otros calendarios.
+ * Google limita cuántas operaciones se hacen por minuto: si un evento falla se reintenta
+ * y se sigue con los demás (nunca se corta toda la sincronización).
  */
 
 /** Color del evento según la clase del concepto. */
@@ -40,18 +42,24 @@ function eventosDeseados_(conceptos, valores, meses, fer, hoy) {
       var fecha = fechaRegla(regla, d.getFullYear(), d.getMonth(), fer);
       if (!fecha) return;
       var confirmado = v.estado !== 'estimado';
-      var pagado = confirmado && fecha <= hoy;
-      var icono = c.clase === 'I' ? '💰' : c.clase === 'A' ? '🏦' : '💸';
       var clave = c.id + '@' + mes;
       out[clave] = {
         fecha: fecha,
         color: colorEvento_(c.clase),
-        titulo: (pagado ? '✓ ' : '') + icono + ' ' + c.nombre + ' · ' + fmtPesos_(v.monto),
-        desc: [describirRegla(regla), c.medio ? 'Medio: ' + c.medio : '', confirmado ? 'Monto confirmado' : 'Monto estimado', 'Generado por Finanzas'].filter(String).join('\n')
+        titulo: c.nombre,
+        desc: ['Monto: ' + fmtPesos_(v.monto) + (confirmado ? '' : ' (estimado)'), describirRegla(regla), c.medio ? 'Medio de pago: ' + c.medio : '', 'Generado por Finanzas'].filter(String).join('\n')
       };
     });
   });
   return out;
+}
+
+/** Ejecuta una operación del calendario; si Google la rechaza (límite por minuto), espera y reintenta una vez. */
+function intentarCal_(fn) {
+  try { return fn(); } catch (e) {
+    Utilities.sleep(1500);
+    return fn();
+  }
 }
 
 function sincronizarCalendario() {
@@ -62,36 +70,44 @@ function sincronizarCalendario() {
   var meses = [];
   for (var k = 0; k < cfg.mesesCal; k++) meses.push(sumarMes_(isoMes_(hoy), k));
   var deseados = eventosDeseados_(m.conceptos, m.valores, meses, leerFeriados(), hoy);
+  var marcados = m.conceptos.filter(function (c) { return c.tipo === 'fijo' && c.calendario === 'si'; });
 
   var cal = obtenerCalendario_(cfg.calendario);
   var desde = desdeIsoMes_(meses[0]);
   var hasta = desdeIsoMes_(sumarMes_(meses[meses.length - 1], 1));
-  var res = { creados: 0, actualizados: 0, borrados: 0 };
+  var res = { creados: 0, actualizados: 0, borrados: 0, errores: [], marcados: marcados.map(function (c) { return c.nombre; }),
+    sinFecha: marcados.filter(function (c) { var r = parsearRegla(c.vence); return !r || r.error; }).map(function (c) { return c.nombre; }) };
+  var nombreDe = function (clave) { var c = m.conceptos.filter(function (x) { return x.id === clave.split('@')[0]; })[0]; return c ? c.nombre : clave; };
   cal.getEvents(desde, hasta).forEach(function (ev) {
     var clave = ev.getTag('fz');
     if (!clave) return;
     var d = deseados[clave];
-    if (!d) { ev.deleteEvent(); res.borrados++; return; }
-    var inicio = ev.getAllDayStartDate();
-    var cambio = false;
-    if (ev.getTitle() !== d.titulo) { ev.setTitle(d.titulo); cambio = true; }
-    if (ev.getDescription() !== d.desc) { ev.setDescription(d.desc); cambio = true; }
-    if (!inicio || claveDia_(inicio) !== claveDia_(d.fecha)) { ev.setAllDayDate(d.fecha); cambio = true; }
-    if (String(ev.getColor()) !== String(d.color)) { ev.setColor(d.color); cambio = true; }
-    if (cambio) res.actualizados++;
+    try {
+      if (!d) { intentarCal_(function () { ev.deleteEvent(); }); res.borrados++; return; }
+      var inicio = ev.getAllDayStartDate();
+      var cambio = false;
+      if (ev.getTitle() !== d.titulo) { intentarCal_(function () { ev.setTitle(d.titulo); }); cambio = true; }
+      if (ev.getDescription() !== d.desc) { intentarCal_(function () { ev.setDescription(d.desc); }); cambio = true; }
+      if (!inicio || claveDia_(inicio) !== claveDia_(d.fecha)) { intentarCal_(function () { ev.setAllDayDate(d.fecha); }); cambio = true; }
+      if (String(ev.getColor()) !== String(d.color)) { intentarCal_(function () { ev.setColor(d.color); }); cambio = true; }
+      if (cambio) { res.actualizados++; Utilities.sleep(150); }
+    } catch (e) { res.errores.push(nombreDe(clave) + ': ' + e.message); }
     delete deseados[clave];
   });
   var minutos = cfg.aviso > 0 ? cfg.aviso * 1440 - 9 * 60 : 0;
   Object.keys(deseados).forEach(function (clave) {
     var d = deseados[clave];
-    var ev = cal.createAllDayEvent(d.titulo, d.fecha, { description: d.desc });
-    ev.setTag('fz', clave);
-    ev.setColor(d.color);
-    ev.removeAllReminders();
-    if (minutos > 0) ev.addPopupReminder(minutos);
-    res.creados++;
+    try {
+      var ev = intentarCal_(function () { return cal.createAllDayEvent(d.titulo, d.fecha, { description: d.desc }); });
+      intentarCal_(function () { ev.setTag('fz', clave); });
+      intentarCal_(function () { ev.setColor(d.color); });
+      intentarCal_(function () { ev.removeAllReminders(); if (minutos > 0) ev.addPopupReminder(minutos); });
+      res.creados++;
+      Utilities.sleep(200);
+    } catch (e) { res.errores.push(nombreDe(clave) + ': ' + e.message); }
   });
   PropertiesService.getScriptProperties().setProperty('calendarioTs', new Date().toISOString());
+  if (res.errores.length) console.warn('Calendario: ' + res.errores.join(' · '));
   return res;
 }
 

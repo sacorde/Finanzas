@@ -151,7 +151,6 @@ function dibujarGrilla() {
       var titulo = c0.nombre + (dia ? ' · ' + txtClase(c0.clase).verbo + ' el ' + dia + ' de ' + etiquetaMesP(foco).toLowerCase() : '') + ' · ' + describirRepeticion(c0) + (c0.medio ? ' · ' + c0.medio : '') + (c0.formula ? ' · ƒx ' + describirFormula(c0.formula, S.conceptos) : '');
       h.push('<tr class="item cl-' + c0.clase + (c0.tipo === 'eventual' ? ' ev' : '') + (S.verTodo && archivada(c0) ? ' archivada' : '') + '" style="--cat:' + catColor(f.cat) + '">' + gr + '<td class="n" data-f="' + r + '" data-k="0" title="' + esc(titulo) + '">' +
         '<button class="lapiz" data-editar="1" title="Editar ' + esc(c0.nombre) + '" aria-label="Editar ' + esc(c0.nombre) + '">✎</button>' +
-        (c0.tipo === 'fijo' ? '<button class="cal-btn" data-cal="1" aria-pressed="' + (c0.calendario === 'si') + '" title="' + (c0.calendario === 'si' ? 'Marcado en el calendario (clic para quitarlo)' : 'Marcar en el calendario') + '" aria-label="Marcar ' + esc(c0.nombre) + ' en el calendario">📅</button>' : '') +
         (meta ? '<span class="meta">' + esc(meta) + '</span>' : '') +
         '<span class="tn">' + esc(c0.nombre) + '</span>' + (dia ? '<span class="dia">(' + dia + ')</span>' : '') +
         (c0.medio && c0.clase !== 'I' ? '<span class="dia medio">(' + esc(abrevMedio(c0.medio)) + ')</span>' : '') + '</td>');
@@ -432,7 +431,7 @@ function pegar(e) {
 function iniciarGrilla() {
   var cont = $('grilla');
   cont.addEventListener('mousedown', function (e) {
-    if (e.target.closest('.mas') || e.target.closest('.lapiz') || e.target.closest('.cal-btn')) return;
+    if (e.target.closest('.mas') || e.target.closest('.lapiz')) return;
     var el = e.target.closest('[data-k][data-f]');
     if (!el || e.button === 2 && G.sel && el.classList.contains('sel')) return;
     var r = Number(el.dataset.f), k = Number(el.dataset.k);
@@ -449,7 +448,7 @@ function iniciarGrilla() {
     pintarSeleccion();
   });
   document.addEventListener('mouseup', function () { G.arrastrando = false; });
-  cont.addEventListener('dblclick', function (e) { if (e.target.closest('[data-k][data-f]') && !e.target.closest('.mas') && !e.target.closest('.lapiz') && !e.target.closest('.cal-btn')) editar(); });
+  cont.addEventListener('dblclick', function (e) { if (e.target.closest('[data-k][data-f]') && !e.target.closest('.mas') && !e.target.closest('.lapiz')) editar(); });
   cont.addEventListener('click', function (e) {
     var mas = e.target.closest('.mas');
     if (mas) {
@@ -458,8 +457,6 @@ function iniciarGrilla() {
       nuevaFila(fr.cat.nombre);
       return;
     }
-    var calBtn = e.target.closest('[data-cal]');
-    if (calBtn) { alternarCalendario(G.filas[Number(calBtn.closest('[data-f]').dataset.f)].c); return; }
     var lapizCat = e.target.closest('[data-editar-cat]');
     if (lapizCat) { abrirPanelCategoria(G.filas[Number(lapizCat.closest('[data-f]').dataset.f)].cat); return; }
     var lapiz = e.target.closest('[data-editar]');

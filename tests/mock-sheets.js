@@ -183,7 +183,7 @@ function crearEntorno(ctx) {
       },
       getService: () => ({ getUrl: () => 'https://script.google.com/macros/s/test/dev' })
     },
-    Utilities: { formatDate: (d) => d.toISOString().slice(0, 16).replace('T', ' ') }
+    Utilities: { formatDate: (d) => d.toISOString().slice(0, 16).replace('T', ' '), sleep: () => {} }
   });
   return { ss, doc, user, eventos };
 }
